@@ -40,7 +40,7 @@
 
 <div>
   <input type="file" id="ocrUploader" accept="image/*" onchange="handleOCR(event)">
-  <form onsubmit="event.preventDefault(); addRow();">
+  <form id="poForm">
     <input type="text" id="vendor" placeholder="Vendor Name">
     <input type="text" id="po" placeholder="PO Number">
     <input type="text" id="material" placeholder="Material">
@@ -59,6 +59,11 @@
 
 <script>
   let data = [];
+
+  document.getElementById("poForm").addEventListener("submit", function(e) {
+    e.preventDefault();
+    addRow();
+  });
 
   function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme') || 'dark';
