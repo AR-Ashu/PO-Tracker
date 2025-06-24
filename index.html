@@ -1,5 +1,4 @@
-// FULL UPDATED CODE WITH BULK IMAGE UPLOAD + EMAIL GENERATOR
-
+<!-- FINAL VERSION: Bulk Upload + Auto-fill + Table Insert -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -52,7 +51,7 @@
   <canvas id="poChart" width="400" height="100"></canvas>
 
   <div>
-    <input type="file" multiple accept="image/*" onchange="readMultipleImages(event)">
+    <input type="file" id="bulkUploader" multiple accept="image/*" onchange="readMultipleImages(event)">
     <button onclick="exportToExcel()">📤 Export to Excel</button>
     <button onclick="generateEmailTemplate()">📧 Generate Delay Email</button>
     <select id="vendorFilter" onchange="renderTable()">
@@ -104,13 +103,23 @@
 
   function readMultipleImages(event) {
     const files = Array.from(event.target.files);
-    files.forEach(file => {
+    files.forEach((file, index) => {
       Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
         const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
         const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
         const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
         const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
         const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+
+        if (index === 0) {
+          // Auto-fill form only for first image
+          if (vendor) document.getElementById('vendor').value = vendor;
+          if (po) document.getElementById('po').value = po;
+          if (material) document.getElementById('material').value = material;
+          if (date) document.getElementById('date').value = date;
+          if (remarks) document.getElementById('remarks').value = remarks;
+        }
+
         if (vendor && po && material && date) {
           data.push({ vendor, po, material, date, remarks: remarks || "" });
           saveData();
@@ -137,8 +146,3 @@
 </script>
 </body>
 </html>
-
-
-
-   
-   
