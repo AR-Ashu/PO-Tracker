@@ -44,9 +44,10 @@
       display: flex;
       gap: 10px;
       margin-bottom: 10px;
+      flex-wrap: wrap;
     }
     .form-row > div {
-      flex: 1;
+      flex: 1 1 200px;
     }
     button {
       padding: 10px;
@@ -55,6 +56,13 @@
       border: none;
       cursor: pointer;
       width: 100%;
+    }
+    .controls {
+      margin-top: 10px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
     }
   </style>
 </head>
@@ -66,11 +74,18 @@
     <div><input id="po" type="text" placeholder="PO Number"></div>
     <div><input id="material" type="text" placeholder="Material"></div>
     <div><input id="date" type="date"></div>
-    <div><select id="status">
-      <option value="On Time">On Time</option>
-      <option value="Delayed">Delayed</option>
-    </select></div>
-    <div><button onclick="addRow()">Add</button></div>
+    <div>
+      <select id="status">
+        <option value="On Time">On Time</option>
+        <option value="Delayed">Delayed</option>
+      </select>
+    </div>
+    <div><button onclick="addRow()">Add PO</button></div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search by Vendor or PO" oninput="filterTable()">
+    <button onclick="exportTableToCSV()">Export to CSV</button>
   </div>
 
   <table id="poTable">
@@ -88,9 +103,9 @@
 
   <script>
     function addRow() {
-      const vendor = document.getElementById("vendor").value;
-      const po = document.getElementById("po").value;
-      const material = document.getElementById("material").value;
+      const vendor = document.getElementById("vendor").value.trim();
+      const po = document.getElementById("po").value.trim();
+      const material = document.getElementById("material").value.trim();
       const date = document.getElementById("date").value;
       const status = document.getElementById("status").value;
 
@@ -98,16 +113,5 @@
 
       const tbody = document.querySelector("#poTable tbody");
       const tr = document.createElement("tr");
-      if (status === "Delayed") tr.classList.add("delayed");
-      tr.innerHTML = `<td>${vendor}</td><td>${po}</td><td>${material}</td><td>${date}</td><td>${status}</td>`;
-      tbody.appendChild(tr);
+      if
 
-      document.getElementById("vendor").value = "";
-      document.getElementById("po").value = "";
-      document.getElementById("material").value = "";
-      document.getElementById("date").value = "";
-      document.getElementById("status").value = "On Time";
-    }
-  </script>
-</body>
-</html>
