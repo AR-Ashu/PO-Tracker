@@ -1,4 +1,4 @@
-<!-- FINAL VERSION: Bulk Upload + Auto-fill + Table Insert -->
+<!-- SIMPLE VERSION: Manual Form Entry + Single Image OCR -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,8 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AR PO Insight</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg: #111; --fg: #eee; --input-bg: #222; --input-border: #444; --accent: #00ffe7;
@@ -27,40 +25,21 @@
     .delayed { background: #ff3c3c33; } .due-soon { background: #ffc10733; }
     .dashboard { margin: 20px 0; background: var(--input-bg); padding: 10px; border-radius: 10px; text-align: center; }
     #themeToggle { position: fixed; top: 10px; right: 10px; }
-    #splash {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: var(--bg); color: var(--accent); display: flex;
-      align-items: center; justify-content: center; font-size: 2em; z-index: 9999;
-    }
-    #emailOutput { background: var(--input-bg); padding: 15px; margin-top: 10px; border-radius: 5px; white-space: pre-line; }
   </style>
 </head>
 <body>
-<div id="splash">Welcome to AR PO Insight</div>
 <button id="themeToggle" onclick="toggleTheme()">🌙 Toggle Theme</button>
-<div id="mainContent" style="display:none;">
-  <h1>AR PO Insight</h1>
+<h1>AR PO Insight</h1>
 
-  <div class="dashboard">
-    <strong>Total POs:</strong> <span id="countTotal">0</span> |
-    <strong>On Time:</strong> <span id="countOnTime">0</span> |
-    <strong>Due Soon:</strong> <span id="countDue">0</span> |
-    <strong>Delayed:</strong> <span id="countDelayed">0</span>
-  </div>
+<div class="dashboard">
+  <strong>Total POs:</strong> <span id="countTotal">0</span> |
+  <strong>On Time:</strong> <span id="countOnTime">0</span> |
+  <strong>Due Soon:</strong> <span id="countDue">0</span> |
+  <strong>Delayed:</strong> <span id="countDelayed">0</span>
+</div>
 
-  <canvas id="poChart" width="400" height="100"></canvas>
-
-  <div>
-    <input type="file" id="bulkUploader" multiple accept="image/*" onchange="readMultipleImages(event)">
-    <button onclick="exportToExcel()">📤 Export to Excel</button>
-    <button onclick="generateEmailTemplate()">📧 Generate Delay Email</button>
-    <select id="vendorFilter" onchange="renderTable()">
-      <option value="all">🔍 Filter by Vendor</option>
-    </select>
-    <label>📅 From: <input type="date" id="startDate" onchange="renderTable()"></label>
-    <label>To: <input type="date" id="endDate" onchange="renderTable()"></label>
-  </div>
-
+<div>
+  <input type="file" id="ocrUploader" accept="image/*" onchange="handleOCR(event)">
   <form onsubmit="event.preventDefault(); addRow();">
     <input type="text" id="vendor" placeholder="Vendor Name">
     <input type="text" id="po" placeholder="PO Number">
@@ -69,63 +48,23 @@
     <input type="text" id="remarks" placeholder="Remarks">
     <button type="submit">Add PO</button>
   </form>
-
-  <table>
-    <thead>
-      <tr><th>Vendor</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>Days Left</th><th>Remarks</th><th>Edit</th><th>Delete</th></tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
-
-  <div id="emailOutput"></div>
 </div>
+
+<table>
+  <thead>
+    <tr><th>Vendor</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>Days Left</th><th>Remarks</th></tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
 
 <script>
   let data = [];
-  let chart;
-
-  window.onload = function () {
-    setTimeout(() => {
-      document.getElementById('splash').style.display = 'none';
-      document.getElementById('mainContent').style.display = 'block';
-      const theme = localStorage.getItem('theme') || 'dark';
-      document.documentElement.setAttribute('data-theme', theme);
-      renderTable();
-    }, 3000);
-  }
 
   function toggleTheme() {
-    const current = document.documentElement.getAttribute('data-theme');
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
     const next = current === 'light' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('theme', next);
-  }
-
-  function readMultipleImages(event) {
-    const files = Array.from(event.target.files);
-    files.forEach((file, index) => {
-      Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
-        const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-        const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-        const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-        const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
-        const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-
-        if (index === 0) {
-          if (vendor) document.getElementById('vendor').value = vendor;
-          if (po) document.getElementById('po').value = po;
-          if (material) document.getElementById('material').value = material;
-          if (date) document.getElementById('date').value = date;
-          if (remarks) document.getElementById('remarks').value = remarks;
-        }
-
-        if (vendor && po && material && date) {
-          data.push({ vendor, po, material, date, remarks: remarks || "" });
-          saveData();
-          renderTable();
-        }
-      });
-    });
   }
 
   function addRow() {
@@ -141,7 +80,6 @@
     }
 
     data.push({ vendor, po, material, date, remarks });
-    saveData();
     renderTable();
 
     document.getElementById('vendor').value = "";
@@ -151,19 +89,55 @@
     document.getElementById('remarks').value = "";
   }
 
-  function generateEmailTemplate() {
+  function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = "";
     const today = new Date();
-    let delayed = data.filter(po => new Date(po.date) < today);
-    if (!delayed.length) {
-      document.getElementById('emailOutput').innerText = 'No delayed POs. All good!';
-      return;
-    }
-    let email = `Subject: Delayed PO Summary\n\nThe following POs are delayed:\n`;
-    delayed.forEach(po => {
-      let days = Math.ceil((today - new Date(po.date)) / (1000 * 60 * 60 * 24));
-      email += `- PO: ${po.po} | Vendor: ${po.vendor} | ${days} Days Overdue\n`;
+    let onTime = 0, due = 0, delayed = 0;
+
+    data.forEach((row, i) => {
+      const tr = document.createElement('tr');
+      const delivery = new Date(row.date);
+      const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
+      let status = "On Time";
+      if (daysLeft < 0) { status = "Delayed"; tr.classList.add('delayed'); delayed++; }
+      else if (daysLeft <= 3) { status = "Due Soon"; tr.classList.add('due-soon'); due++; }
+      else { onTime++; }
+
+      tr.innerHTML = `
+        <td>${row.vendor}</td>
+        <td>${row.po}</td>
+        <td>${row.material}</td>
+        <td>${row.date}</td>
+        <td>${status}</td>
+        <td>${daysLeft}</td>
+        <td>${row.remarks}</td>
+      `;
+      tbody.appendChild(tr);
     });
-    document.getElementById('emailOutput').innerText = email;
+
+    document.getElementById('countTotal').innerText = data.length;
+    document.getElementById('countOnTime').innerText = onTime;
+    document.getElementById('countDue').innerText = due;
+    document.getElementById('countDelayed').innerText = delayed;
+  }
+
+  function handleOCR(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
+      const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+      const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+      const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+      const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
+      const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+
+      if (vendor) document.getElementById('vendor').value = vendor;
+      if (po) document.getElementById('po').value = po;
+      if (material) document.getElementById('material').value = material;
+      if (date) document.getElementById('date').value = date;
+      if (remarks) document.getElementById('remarks').value = remarks;
+    });
   }
 </script>
 </body>
