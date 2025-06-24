@@ -1,4 +1,4 @@
-<!-- ENHANCED VERSION: PO Tracker with Export, Live Clock (12hr), Bulk OCR, Email Reminder & Chart -->
+<!-- ENHANCED VERSION: PO Tracker with Export, Live Clock (12hr), Bulk OCR & Chart -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -53,7 +53,6 @@
     <input type="text" id="remarks" placeholder="Remarks">
     <button type="submit">Add PO</button>
     <button type="button" onclick="exportExcel()">Export to Excel</button>
-    <button type="button" onclick="generateEmailReminder()">Generate Email Reminder</button>
   </form>
 </div>
 
@@ -160,28 +159,6 @@
     a.click(); URL.revokeObjectURL(url);
   }
 
-  function generateEmailReminder() {
-  const delayed = data.filter(row => new Date(row.date) < new Date());
-  if (delayed.length === 0) return alert('No delayed POs');
-
-  const email = prompt("Enter recipient email address:", "example@email.com");
-  if (!email) return;
-
-  let body = 'Dear Team,%0D%0A%0D%0AThe following POs are delayed:%0D%0A';
-  delayed.forEach(row => {
-    body += `PO: ${row.po}, Vendor: ${row.vendor}, Delivery Date: ${row.date}, Material: ${row.material}%0D%0A`;
-  });
-  body += '%0D%0AKindly take necessary action.%0D%0A%0D%0ARegards,%0D%0AAR PO Insight';
-
-  const subject = 'Delayed PO Reminder';
-  const mailtoLink = `mailto:${email}?subject=${subject}&body=${body}`;
-  window.location.href = mailtoLink;
-}, Vendor: ${row.vendor}, Delivery Date: ${row.date}, Material: ${row.material}\n`;
-    });
-    const mailto = `mailto:?subject=Delayed PO Reminder&body=${encodeURIComponent(body)}`;
-    window.location.href = mailto;
-  }
-
   function handleBulkOCR(event) {
     const files = Array.from(event.target.files);
     if (!files.length) return;
@@ -201,3 +178,4 @@
 </script>
 </body>
 </html>
+
