@@ -1,4 +1,4 @@
-<!-- ENHANCED VERSION: PO Tracker with Export, Live Clock, Email Reminder & Chart -->
+<!-- ENHANCED VERSION: PO Tracker with Export, Live Clock (12hr), Bulk OCR, Email Reminder & Chart -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -44,7 +44,7 @@
 <canvas id="poChart" style="max-height:300px"></canvas>
 
 <div>
-  <input type="file" id="ocrUploader" accept="image/*" onchange="handleOCR(event)">
+  <input type="file" id="ocrUploader" accept="image/*" multiple onchange="handleBulkOCR(event)">
   <form id="poForm">
     <input type="text" id="vendor" placeholder="Vendor Name">
     <input type="text" id="po" placeholder="PO Number">
@@ -86,25 +86,33 @@
   }
 
   function updateClock() {
-    document.getElementById("clock").innerText = new Date().toLocaleTimeString();
+    const now = new Date();
+    let hrs = now.getHours();
+    const mins = now.getMinutes().toString().padStart(2, '0');
+    const secs = now.getSeconds().toString().padStart(2, '0');
+    const ampm = hrs >= 12 ? 'PM' : 'AM';
+    hrs = hrs % 12 || 12;
+    document.getElementById("clock").innerText = `${hrs}:${mins}:${secs} ${ampm}`;
     setTimeout(updateClock, 1000);
   }
   updateClock();
 
-  function addRow() {
-    const vendor = document.getElementById('vendor').value.trim();
-    const po = document.getElementById('po').value.trim();
-    const material = document.getElementById('material').value.trim();
-    const date = document.getElementById('date').value;
-    const remarks = document.getElementById('remarks').value.trim();
+  function addRow(rowData) {
+    const vendor = rowData?.vendor || document.getElementById('vendor').value.trim();
+    const po = rowData?.po || document.getElementById('po').value.trim();
+    const material = rowData?.material || document.getElementById('material').value.trim();
+    const date = rowData?.date || document.getElementById('date').value;
+    const remarks = rowData?.remarks || document.getElementById('remarks').value.trim();
     if (!vendor || !po || !material || !date) return alert("Please fill all fields.");
 
     data.push({ vendor, po, material, date, remarks });
-    document.getElementById('vendor').value = "";
-    document.getElementById('po').value = "";
-    document.getElementById('material').value = "";
-    document.getElementById('date').value = "";
-    document.getElementById('remarks').value = "";
+    if (!rowData) {
+      document.getElementById('vendor').value = "";
+      document.getElementById('po').value = "";
+      document.getElementById('material').value = "";
+      document.getElementById('date').value = "";
+      document.getElementById('remarks').value = "";
+    }
     renderTable();
   }
 
@@ -155,30 +163,31 @@
   function generateEmailReminder() {
     const delayed = data.filter(row => new Date(row.date) < new Date());
     if (delayed.length === 0) return alert('No delayed POs');
-    let body = 'Reminder: The following POs are delayed:%0D%0A';
+    let body = 'Reminder: The following POs are delayed:\n';
     delayed.forEach(row => {
-      body += `PO: ${row.po}, Vendor: ${row.vendor}, Delivery Date: ${row.date}, Material: ${row.material}%0D%0A`;
+      body += `PO: ${row.po}, Vendor: ${row.vendor}, Delivery Date: ${row.date}, Material: ${row.material}\n`;
     });
-    window.open(`mailto:?subject=Delayed PO Reminder&body=${body}`);
+    const mailto = `mailto:?subject=Delayed PO Reminder&body=${encodeURIComponent(body)}`;
+    window.location.href = mailto;
   }
 
-  function handleOCR(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
-      const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-      const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-      const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-      const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
-      const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-
-      if (vendor) document.getElementById('vendor').value = vendor;
-      if (po) document.getElementById('po').value = po;
-      if (material) document.getElementById('material').value = material;
-      if (date) document.getElementById('date').value = date;
-      if (remarks) document.getElementById('remarks').value = remarks;
+  function handleBulkOCR(event) {
+    const files = Array.from(event.target.files);
+    if (!files.length) return;
+    files.forEach(file => {
+      Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
+        const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+        const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+        const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+        const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
+        const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+        if (vendor && po && material && date) {
+          addRow({ vendor, po, material, date, remarks: remarks || '' });
+        }
+      });
     });
   }
 </script>
 </body>
 </html>
+
