@@ -112,7 +112,6 @@
         const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
 
         if (index === 0) {
-          // Auto-fill form only for first image
           if (vendor) document.getElementById('vendor').value = vendor;
           if (po) document.getElementById('po').value = po;
           if (material) document.getElementById('material').value = material;
@@ -127,6 +126,29 @@
         }
       });
     });
+  }
+
+  function addRow() {
+    const vendor = document.getElementById('vendor').value.trim();
+    const po = document.getElementById('po').value.trim();
+    const material = document.getElementById('material').value.trim();
+    const date = document.getElementById('date').value;
+    const remarks = document.getElementById('remarks').value.trim();
+
+    if (!vendor || !po || !material || !date) {
+      alert("Please fill all fields.");
+      return;
+    }
+
+    data.push({ vendor, po, material, date, remarks });
+    saveData();
+    renderTable();
+
+    document.getElementById('vendor').value = "";
+    document.getElementById('po').value = "";
+    document.getElementById('material').value = "";
+    document.getElementById('date').value = "";
+    document.getElementById('remarks').value = "";
   }
 
   function generateEmailTemplate() {
