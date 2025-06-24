@@ -8,8 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { background: #111; color: #eee; font-family: Arial, sans-serif; margin: 0; }
-    .login-screen, .app-content { display: none; padding: 20px; }
+    body { background: #111; color: #eee; font-family: Arial, sans-serif; margin: 0; padding: 20px; }
     h1 { color: #00ffe7; text-align: center; }
     input, select, button { padding: 10px; margin: 5px; background: #222; color: #fff; border: 1px solid #444; }
     table { width: 100%; margin-top: 20px; border-collapse: collapse; }
@@ -17,18 +16,25 @@
     .delayed { background: #ff3c3c33; }
     .due-soon { background: #ffc10733; }
     .dashboard { margin: 20px 0; background: #222; padding: 10px; border-radius: 10px; text-align: center; }
+    #splash {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #111;
+      color: #00ffe7;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2em;
+      z-index: 9999;
+    }
   </style>
 </head>
 <body>
 
-  <div class="login-screen" id="loginScreen">
-    <h1>Login to AR PO Insight</h1>
-    <input type="text" id="username" placeholder="Username"><br>
-    <input type="password" id="password" placeholder="Password"><br>
-    <button onclick="login()">Login</button>
-  </div>
+  <div id="splash">Welcome to AR PO Insight</div>
 
-  <div class="app-content" id="appContent">
+  <div id="mainContent" style="display:none;">
     <h1>AR PO Insight</h1>
 
     <div class="dashboard">
@@ -68,24 +74,13 @@
   </div>
 
   <script>
-    const loginScreen = document.getElementById("loginScreen");
-    const appContent = document.getElementById("appContent");
-
-    function login() {
-      const user = document.getElementById("username").value;
-      const pass = document.getElementById("password").value;
-      if (user === "admin" && pass === "1234") {
-        loginScreen.style.display = "none";
-        appContent.style.display = "block";
+    window.onload = function () {
+      setTimeout(() => {
+        document.getElementById('splash').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
         renderTable();
-      } else {
-        alert("Invalid credentials! Use admin / 1234");
-      }
+      }, 3000);
     }
-
-    loginScreen.style.display = "block";
-
-    // [Remaining script stays same below this point ↓]
 
     let data = [];
     let chart;
