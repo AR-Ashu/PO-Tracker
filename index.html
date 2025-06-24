@@ -1,4 +1,4 @@
-<!-- SIMPLE VERSION: Manual Form Entry + Single Image OCR -->
+<!-- ENHANCED VERSION: PO Tracker with Export, Live Clock, Email Reminder & Chart -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AR PO Insight</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg: #111; --fg: #eee; --input-bg: #222; --input-border: #444; --accent: #00ffe7;
@@ -25,9 +26,11 @@
     .delayed { background: #ff3c3c33; } .due-soon { background: #ffc10733; }
     .dashboard { margin: 20px 0; background: var(--input-bg); padding: 10px; border-radius: 10px; text-align: center; }
     #themeToggle { position: fixed; top: 10px; right: 10px; }
+    #clock { position: fixed; top: 10px; left: 10px; font-weight: bold; }
   </style>
 </head>
 <body>
+<div id="clock"></div>
 <button id="themeToggle" onclick="toggleTheme()">🌙 Toggle Theme</button>
 <h1>AR PO Insight</h1>
 
@@ -38,6 +41,8 @@
   <strong>Delayed:</strong> <span id="countDelayed">0</span>
 </div>
 
+<canvas id="poChart" style="max-height:300px"></canvas>
+
 <div>
   <input type="file" id="ocrUploader" accept="image/*" onchange="handleOCR(event)">
   <form id="poForm">
@@ -47,6 +52,8 @@
     <input type="date" id="date">
     <input type="text" id="remarks" placeholder="Remarks">
     <button type="submit">Add PO</button>
+    <button type="button" onclick="exportExcel()">Export to Excel</button>
+    <button type="button" onclick="generateEmailReminder()">Generate Email Reminder</button>
   </form>
 </div>
 
@@ -59,6 +66,12 @@
 
 <script>
   let data = [];
+  const ctx = document.getElementById('poChart').getContext('2d');
+  let chart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: ['On Time', 'Due Soon', 'Delayed'], datasets: [{ label: 'POs', data: [0, 0, 0], backgroundColor: ['green', 'orange', 'red'] }] },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+  });
 
   document.getElementById("poForm").addEventListener("submit", function(e) {
     e.preventDefault();
@@ -72,26 +85,27 @@
     localStorage.setItem('theme', next);
   }
 
+  function updateClock() {
+    document.getElementById("clock").innerText = new Date().toLocaleTimeString();
+    setTimeout(updateClock, 1000);
+  }
+  updateClock();
+
   function addRow() {
     const vendor = document.getElementById('vendor').value.trim();
     const po = document.getElementById('po').value.trim();
     const material = document.getElementById('material').value.trim();
     const date = document.getElementById('date').value;
     const remarks = document.getElementById('remarks').value.trim();
-
-    if (!vendor || !po || !material || !date) {
-      alert("Please fill all fields.");
-      return;
-    }
+    if (!vendor || !po || !material || !date) return alert("Please fill all fields.");
 
     data.push({ vendor, po, material, date, remarks });
-    renderTable();
-
     document.getElementById('vendor').value = "";
     document.getElementById('po').value = "";
     document.getElementById('material').value = "";
     document.getElementById('date').value = "";
     document.getElementById('remarks').value = "";
+    renderTable();
   }
 
   function renderTable() {
@@ -100,7 +114,7 @@
     const today = new Date();
     let onTime = 0, due = 0, delayed = 0;
 
-    data.forEach((row, i) => {
+    data.forEach((row) => {
       const tr = document.createElement('tr');
       const delivery = new Date(row.date);
       const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
@@ -109,15 +123,7 @@
       else if (daysLeft <= 3) { status = "Due Soon"; tr.classList.add('due-soon'); due++; }
       else { onTime++; }
 
-      tr.innerHTML = `
-        <td>${row.vendor}</td>
-        <td>${row.po}</td>
-        <td>${row.material}</td>
-        <td>${row.date}</td>
-        <td>${status}</td>
-        <td>${daysLeft}</td>
-        <td>${row.remarks}</td>
-      `;
+      tr.innerHTML = `<td>${row.vendor}</td><td>${row.po}</td><td>${row.material}</td><td>${row.date}</td><td>${status}</td><td>${daysLeft}</td><td>${row.remarks}</td>`;
       tbody.appendChild(tr);
     });
 
@@ -125,6 +131,35 @@
     document.getElementById('countOnTime').innerText = onTime;
     document.getElementById('countDue').innerText = due;
     document.getElementById('countDelayed').innerText = delayed;
+
+    chart.data.datasets[0].data = [onTime, due, delayed];
+    chart.update();
+  }
+
+  function exportExcel() {
+    let csv = 'Vendor,PO No,Material,Delivery Date,Status,Days Left,Remarks\n';
+    const today = new Date();
+    data.forEach(row => {
+      const delivery = new Date(row.date);
+      const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
+      let status = daysLeft < 0 ? "Delayed" : daysLeft <= 3 ? "Due Soon" : "On Time";
+      csv += `${row.vendor},${row.po},${row.material},${row.date},${status},${daysLeft},${row.remarks}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'PO_Insight.csv';
+    a.click(); URL.revokeObjectURL(url);
+  }
+
+  function generateEmailReminder() {
+    const delayed = data.filter(row => new Date(row.date) < new Date());
+    if (delayed.length === 0) return alert('No delayed POs');
+    let body = 'Reminder: The following POs are delayed:%0D%0A';
+    delayed.forEach(row => {
+      body += `PO: ${row.po}, Vendor: ${row.vendor}, Delivery Date: ${row.date}, Material: ${row.material}%0D%0A`;
+    });
+    window.open(`mailto:?subject=Delayed PO Reminder&body=${body}`);
   }
 
   function handleOCR(event) {
