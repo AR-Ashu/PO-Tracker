@@ -1,18 +1,217 @@
-<!-- The full code remains unchanged except the following additions -->
-<!-- ADD THIS inside <body> tag where filters are: -->
-<div>
-  <label>📅 From: <input type="date" id="startDate" onchange="renderTable()"></label>
-  <label>To: <input type="date" id="endDate" onchange="renderTable()"></label>
-</div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PO Tracker + OCR + Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { background: #111; color: #eee; font-family: Arial, sans-serif; padding: 20px; }
+    h1 { color: #00ffe7; text-align: center; }
+    input, select, button { padding: 10px; margin: 5px; background: #222; color: #fff; border: 1px solid #444; }
+    table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+    th, td { padding: 10px; border: 1px solid #333; }
+    .delayed { background: #ff3c3c33; }
+    .due-soon { background: #ffc10733; }
+    .dashboard { margin: 20px 0; background: #222; padding: 10px; border-radius: 10px; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>PO Tracker + OCR + Dashboard</h1>
 
-<!-- ADD THIS inside renderTable() just after vendorFilter line -->
-const startDate = document.getElementById('startDate').value ? new Date(document.getElementById('startDate').value) : null;
-const endDate = document.getElementById('endDate').value ? new Date(document.getElementById('endDate').value) : null;
+  <div class="dashboard">
+    <strong>Total POs:</strong> <span id="countTotal">0</span> |
+    <strong>On Time:</strong> <span id="countOnTime">0</span> |
+    <strong>Due Soon:</strong> <span id="countDue">0</span> |
+    <strong>Delayed:</strong> <span id="countDelayed">0</span>
+  </div>
 
-<!-- REPLACE this line inside data.forEach() condition check: -->
-if (vendorFilter !== 'all' && row.vendor !== vendorFilter) return;
+  <canvas id="poChart" width="400" height="100"></canvas>
 
-<!-- WITH -->
-if ((vendorFilter !== 'all' && row.vendor !== vendorFilter) ||
-    (startDate && new Date(row.date) < startDate) ||
-    (endDate && new Date(row.date) > endDate)) return;
+  <div>
+    <input type="file" accept="image/*" onchange="readImageText(event)">
+    <button onclick="exportToExcel()">📤 Export to Excel</button>
+    <select id="vendorFilter" onchange="renderTable()">
+      <option value="all">🔍 Filter by Vendor</option>
+    </select>
+    <label>📅 From: <input type="date" id="startDate" onchange="renderTable()"></label>
+    <label>To: <input type="date" id="endDate" onchange="renderTable()"></label>
+  </div>
+
+  <form onsubmit="event.preventDefault(); addRow();">
+    <input type="text" id="vendor" placeholder="Vendor Name">
+    <input type="text" id="po" placeholder="PO Number">
+    <input type="text" id="material" placeholder="Material">
+    <input type="date" id="date">
+    <input type="text" id="remarks" placeholder="Remarks">
+    <button type="submit">Add PO</button>
+  </form>
+
+  <table>
+    <thead>
+      <tr><th>Vendor</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>⏳ Days Left</th><th>Remarks</th><th>Edit</th><th>Delete</th></tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <script>
+    let data = [];
+    let chart;
+
+    window.onload = () => {
+      const saved = JSON.parse(localStorage.getItem('poData') || '[]');
+      data = saved;
+      renderTable();
+    };
+
+    function saveData() {
+      localStorage.setItem('poData', JSON.stringify(data));
+    }
+
+    function readImageText(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      Tesseract.recognize(file, 'eng')
+        .then(({ data: { text } }) => {
+          const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+          const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+          const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+          const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
+          const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+
+          if (vendor) document.getElementById('vendor').value = vendor;
+          if (po) document.getElementById('po').value = po;
+          if (material) document.getElementById('material').value = material;
+          if (date) document.getElementById('date').value = date;
+          if (remarks) document.getElementById('remarks').value = remarks;
+
+          alert("Text extracted from image and form filled!");
+        });
+    }
+
+    function addRow() {
+      const vendor = document.getElementById('vendor').value;
+      const po = document.getElementById('po').value;
+      const material = document.getElementById('material').value;
+      const date = document.getElementById('date').value;
+      const remarks = document.getElementById('remarks').value;
+      if (!vendor || !po || !material || !date) return alert("Fill all fields");
+
+      const entry = { vendor, po, material, date, remarks };
+      data.push(entry);
+      saveData();
+      renderTable();
+      document.querySelector('form').reset();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const vendorFilter = document.getElementById('vendorFilter').value;
+      const startDate = document.getElementById('startDate').value ? new Date(document.getElementById('startDate').value) : null;
+      const endDate = document.getElementById('endDate').value ? new Date(document.getElementById('endDate').value) : null;
+      tbody.innerHTML = "";
+
+      let vendors = new Set();
+      let onTime = 0, due = 0, delayed = 0;
+
+      data.forEach((row, index) => {
+        const delDate = new Date(row.date);
+        const today = new Date();
+        let status = "On Time";
+        let daysLeft = Math.ceil((delDate - today) / (1000 * 60 * 60 * 24));
+        if (delDate < today) { status = "Delayed"; delayed++; }
+        else if (daysLeft <= 3) { status = "Due Soon"; due++; }
+        else { onTime++; }
+
+        if ((vendorFilter !== 'all' && row.vendor !== vendorFilter) ||
+            (startDate && delDate < startDate) ||
+            (endDate && delDate > endDate)) return;
+
+        vendors.add(row.vendor);
+
+        const tr = document.createElement('tr');
+        if (status === "Delayed") tr.classList.add("delayed");
+        if (status === "Due Soon") tr.classList.add("due-soon");
+
+        tr.innerHTML = `
+          <td>${row.vendor}</td>
+          <td>${row.po}</td>
+          <td>${row.material}</td>
+          <td>${row.date}</td>
+          <td>${status}</td>
+          <td>${daysLeft >= 0 ? daysLeft : 'Overdue'}</td>
+          <td>${row.remarks}</td>
+          <td><button onclick="editRow(${index})">✏️</button></td>
+          <td><button onclick="deleteRow(${index})">🗑️</button></td>`;
+        tbody.appendChild(tr);
+      });
+
+      const filterSelect = document.getElementById('vendorFilter');
+      filterSelect.innerHTML = '<option value="all">🔍 Filter by Vendor</option>';
+      vendors.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = opt.text = v;
+        filterSelect.appendChild(opt);
+      });
+
+      document.getElementById('countTotal').textContent = data.length;
+      document.getElementById('countOnTime').textContent = onTime;
+      document.getElementById('countDue').textContent = due;
+      document.getElementById('countDelayed').textContent = delayed;
+
+      updateChart(onTime, due, delayed);
+    }
+
+    function deleteRow(index) {
+      data.splice(index, 1);
+      saveData();
+      renderTable();
+    }
+
+    function editRow(index) {
+      const row = data[index];
+      document.getElementById('vendor').value = row.vendor;
+      document.getElementById('po').value = row.po;
+      document.getElementById('material').value = row.material;
+      document.getElementById('date').value = row.date;
+      document.getElementById('remarks').value = row.remarks;
+      deleteRow(index);
+    }
+
+    function exportToExcel() {
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "PO_Tracker");
+      XLSX.writeFile(wb, "PO_Tracker.xlsx");
+    }
+
+    function updateChart(onTime, due, delayed) {
+      const ctx = document.getElementById('poChart').getContext('2d');
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['On Time', 'Due Soon', 'Delayed'],
+          datasets: [{
+            label: 'PO Status',
+            data: [onTime, due, delayed],
+            backgroundColor: ['#00ff88aa', '#ffc107aa', '#ff3c3caa']
+          }]
+        },
+        options: {
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: 'PO Status Summary', color: '#fff' }
+          },
+          scales: {
+            y: { beginAtZero: true, ticks: { color: '#fff' } },
+            x: { ticks: { color: '#fff' } }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
