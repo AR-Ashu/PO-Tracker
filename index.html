@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PO Tracker + OCR + Dashboard</title>
+  <title>AR PO Insight</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { background: #111; color: #eee; font-family: Arial, sans-serif; padding: 20px; }
+    body { background: #111; color: #eee; font-family: Arial, sans-serif; margin: 0; }
+    .login-screen, .app-content { display: none; padding: 20px; }
     h1 { color: #00ffe7; text-align: center; }
     input, select, button { padding: 10px; margin: 5px; background: #222; color: #fff; border: 1px solid #444; }
     table { width: 100%; margin-top: 20px; border-collapse: collapse; }
@@ -19,52 +20,75 @@
   </style>
 </head>
 <body>
-  <h1>PO Tracker + OCR + Dashboard</h1>
 
-  <div class="dashboard">
-    <strong>Total POs:</strong> <span id="countTotal">0</span> |
-    <strong>On Time:</strong> <span id="countOnTime">0</span> |
-    <strong>Due Soon:</strong> <span id="countDue">0</span> |
-    <strong>Delayed:</strong> <span id="countDelayed">0</span>
+  <div class="login-screen" id="loginScreen">
+    <h1>Login to AR PO Insight</h1>
+    <input type="text" id="username" placeholder="Username"><br>
+    <input type="password" id="password" placeholder="Password"><br>
+    <button onclick="login()">Login</button>
   </div>
 
-  <canvas id="poChart" width="400" height="100"></canvas>
+  <div class="app-content" id="appContent">
+    <h1>AR PO Insight</h1>
 
-  <div>
-    <input type="file" accept="image/*" onchange="readImageText(event)">
-    <button onclick="exportToExcel()">📤 Export to Excel</button>
-    <select id="vendorFilter" onchange="renderTable()">
-      <option value="all">🔍 Filter by Vendor</option>
-    </select>
-    <label>📅 From: <input type="date" id="startDate" onchange="renderTable()"></label>
-    <label>To: <input type="date" id="endDate" onchange="renderTable()"></label>
+    <div class="dashboard">
+      <strong>Total POs:</strong> <span id="countTotal">0</span> |
+      <strong>On Time:</strong> <span id="countOnTime">0</span> |
+      <strong>Due Soon:</strong> <span id="countDue">0</span> |
+      <strong>Delayed:</strong> <span id="countDelayed">0</span>
+    </div>
+
+    <canvas id="poChart" width="400" height="100"></canvas>
+
+    <div>
+      <input type="file" accept="image/*" onchange="readImageText(event)">
+      <button onclick="exportToExcel()">📤 Export to Excel</button>
+      <select id="vendorFilter" onchange="renderTable()">
+        <option value="all">🔍 Filter by Vendor</option>
+      </select>
+      <label>📅 From: <input type="date" id="startDate" onchange="renderTable()"></label>
+      <label>To: <input type="date" id="endDate" onchange="renderTable()"></label>
+    </div>
+
+    <form onsubmit="event.preventDefault(); addRow();">
+      <input type="text" id="vendor" placeholder="Vendor Name">
+      <input type="text" id="po" placeholder="PO Number">
+      <input type="text" id="material" placeholder="Material">
+      <input type="date" id="date">
+      <input type="text" id="remarks" placeholder="Remarks">
+      <button type="submit">Add PO</button>
+    </form>
+
+    <table>
+      <thead>
+        <tr><th>Vendor</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>⏳ Days Left</th><th>Remarks</th><th>Edit</th><th>Delete</th></tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
   </div>
-
-  <form onsubmit="event.preventDefault(); addRow();">
-    <input type="text" id="vendor" placeholder="Vendor Name">
-    <input type="text" id="po" placeholder="PO Number">
-    <input type="text" id="material" placeholder="Material">
-    <input type="date" id="date">
-    <input type="text" id="remarks" placeholder="Remarks">
-    <button type="submit">Add PO</button>
-  </form>
-
-  <table>
-    <thead>
-      <tr><th>Vendor</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>⏳ Days Left</th><th>Remarks</th><th>Edit</th><th>Delete</th></tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
 
   <script>
+    const loginScreen = document.getElementById("loginScreen");
+    const appContent = document.getElementById("appContent");
+
+    function login() {
+      const user = document.getElementById("username").value;
+      const pass = document.getElementById("password").value;
+      if (user === "admin" && pass === "1234") {
+        loginScreen.style.display = "none";
+        appContent.style.display = "block";
+        renderTable();
+      } else {
+        alert("Invalid credentials! Use admin / 1234");
+      }
+    }
+
+    loginScreen.style.display = "block";
+
+    // [Remaining script stays same below this point ↓]
+
     let data = [];
     let chart;
-
-    window.onload = () => {
-      const saved = JSON.parse(localStorage.getItem('poData') || '[]');
-      data = saved;
-      renderTable();
-    };
 
     function saveData() {
       localStorage.setItem('poData', JSON.stringify(data));
