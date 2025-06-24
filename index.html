@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PO Tracker with Image Upload</title>
+  <title>PO Tracker + OCR + Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { background: #111; color: #eee; font-family: Arial; padding: 20px; }
     h1 { color: #00ffe7; text-align: center; }
@@ -13,74 +15,15 @@
     th, td { padding: 10px; border: 1px solid #333; }
     .delayed { background: #ff3c3c33; }
     .due-soon { background: #ffc10733; }
+    .dashboard { margin: 20px 0; background: #222; padding: 10px; border-radius: 10px; text-align: center; }
   </style>
 </head>
 <body>
-  <h1>PO Tracker + OCR Image Reader</h1>
+  <h1>PO Tracker + OCR + Dashboard</h1>
 
-  <input type="file" accept="image/*" onchange="readImageText(event)">
-  <br><br>
-
-  <form onsubmit="event.preventDefault(); addRow();">
-    <input type="text" id="vendor" placeholder="Vendor Name">
-    <input type="text" id="po" placeholder="PO Number">
-    <input type="text" id="material" placeholder="Material">
-    <input type="date" id="date">
-    <input type="text" id="remarks" placeholder="Remarks">
-    <button type="submit">Add PO</button>
-  </form>
-
-  <table>
-    <thead>
-      <tr><th>Vendor</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>Remarks</th></tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
-
-  <script>
-    function readImageText(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      Tesseract.recognize(file, 'eng')
-        .then(({ data: { text } }) => {
-          const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-          const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-          const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-          const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
-          const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-
-          if (vendor) document.getElementById('vendor').value = vendor;
-          if (po) document.getElementById('po').value = po;
-          if (material) document.getElementById('material').value = material;
-          if (date) document.getElementById('date').value = date;
-          if (remarks) document.getElementById('remarks').value = remarks;
-
-          alert("Text extracted from image and form filled!");
-        });
-    }
-
-    function addRow() {
-      const vendor = document.getElementById('vendor').value;
-      const po = document.getElementById('po').value;
-      const material = document.getElementById('material').value;
-      const date = document.getElementById('date').value;
-      const remarks = document.getElementById('remarks').value;
-      if (!vendor || !po || !material || !date) return alert("Fill all fields");
-
-      const today = new Date();
-      const delDate = new Date(date);
-      let status = "On Time";
-      if (delDate < today) status = "Delayed";
-      else if ((delDate - today) / (1000 * 60 * 60 * 24) <= 3) status = "Due Soon";
-
-      const tr = document.createElement('tr');
-      if (status === "Delayed") tr.classList.add("delayed");
-      if (status === "Due Soon") tr.classList.add("due-soon");
-      tr.innerHTML = `<td>${vendor}</td><td>${po}</td><td>${material}</td><td>${date}</td><td>${status}</td><td>${remarks}</td>`;
-      document.getElementById('tableBody').appendChild(tr);
-
-      document.querySelector('form').reset();
-    }
-  </script>
-</body>
-</html>
+  <div class="dashboard">
+    <strong>Total POs:</strong> <span id="countTotal">0</span> |
+    <strong>On Time:</strong> <span id="countOnTime">0</span> |
+    <strong>Due Soon:</strong> <span id="countDue">0</span> |
+    <strong>Delayed:</strong> <span id="countDelayed">0</span>
+  </div
