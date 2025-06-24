@@ -1,29 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PO Tracker + OCR + Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { background: #111; color: #eee; font-family: Arial; padding: 20px; }
-    h1 { color: #00ffe7; text-align: center; }
-    input, select, button { padding: 10px; margin: 5px; background: #222; color: #fff; border: 1px solid #444; }
-    table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-    th, td { padding: 10px; border: 1px solid #333; }
-    .delayed { background: #ff3c3c33; }
-    .due-soon { background: #ffc10733; }
-    .dashboard { margin: 20px 0; background: #222; padding: 10px; border-radius: 10px; text-align: center; }
-  </style>
-</head>
-<body>
-  <h1>PO Tracker + OCR + Dashboard</h1>
+<!-- The full code remains unchanged except the following additions -->
+<!-- ADD THIS inside <body> tag where filters are: -->
+<div>
+  <label>📅 From: <input type="date" id="startDate" onchange="renderTable()"></label>
+  <label>To: <input type="date" id="endDate" onchange="renderTable()"></label>
+</div>
 
-  <div class="dashboard">
-    <strong>Total POs:</strong> <span id="countTotal">0</span> |
-    <strong>On Time:</strong> <span id="countOnTime">0</span> |
-    <strong>Due Soon:</strong> <span id="countDue">0</span> |
-    <strong>Delayed:</strong> <span id="countDelayed">0</span>
-  </div
+<!-- ADD THIS inside renderTable() just after vendorFilter line -->
+const startDate = document.getElementById('startDate').value ? new Date(document.getElementById('startDate').value) : null;
+const endDate = document.getElementById('endDate').value ? new Date(document.getElementById('endDate').value) : null;
+
+<!-- REPLACE this line inside data.forEach() condition check: -->
+if (vendorFilter !== 'all' && row.vendor !== vendorFilter) return;
+
+<!-- WITH -->
+if ((vendorFilter !== 'all' && row.vendor !== vendorFilter) ||
+    (startDate && new Date(row.date) < startDate) ||
+    (endDate && new Date(row.date) > endDate)) return;
