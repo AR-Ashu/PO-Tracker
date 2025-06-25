@@ -94,6 +94,49 @@
 </table>
 
 <script>
+function addRow(rowData = null) {
+  const vendor = rowData ? rowData.vendor : document.getElementById('vendor').value.trim();
+  const vendorEmail = rowData ? rowData.vendorEmail : document.getElementById('vendorEmail').value.trim();
+  const po = rowData ? rowData.po : document.getElementById('po').value.trim();
+  const material = rowData ? rowData.material : document.getElementById('material').value.trim();
+  const date = rowData ? rowData.date : document.getElementById('date').value;
+  const remarks = rowData ? rowData.remarks : document.getElementById('remarks').value.trim();
+  if (!vendor || !po || !material || !date) return alert("Please fill all fields.");
+
+  const today = new Date();
+  const delivery = new Date(date);
+  const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
+  let status = 'On Time';
+  if (daysLeft < 0) status = 'Delayed';
+  else if (daysLeft <= 3) status = 'Due Soon';
+
+  const row = document.createElement('tr');
+  if (status === 'Delayed') row.classList.add('delayed');
+  else if (status === 'Due Soon') row.classList.add('due-soon');
+
+  row.innerHTML = `
+    <td>${vendor}</td>
+    <td>${vendorEmail}</td>
+    <td>${po}</td>
+    <td>${material}</td>
+    <td>${date}</td>
+    <td>${status}</td>
+    <td>${daysLeft}</td>
+    <td>${remarks}</td>
+  `;
+  document.getElementById('tableBody').appendChild(row);
+  updateCounts();
+  updateVendorDropdown();
+  if (!rowData) {
+    document.getElementById('vendor').value = "";
+    document.getElementById('vendorEmail').value = "";
+    document.getElementById('po').value = "";
+    document.getElementById('material').value = "";
+    document.getElementById('date').value = "";
+    document.getElementById('remarks').value = "";
+  }
+}
+
 function handleBulkOCR(event) {
   const files = Array.from(event.target.files);
   files.forEach(file => {
