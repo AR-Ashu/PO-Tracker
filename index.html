@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AR PO Insight</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
   <style>
     :root {
       --bg: #111;
@@ -58,8 +58,8 @@
 </button>
 <h1>AR PO Insight</h1>
 <canvas id="statusChart" height="100"></canvas>
-<input type="file" id="ocrUploader" accept="image/*" multiple onchange="handleBulkOCR(event)">
-<form onsubmit="event.preventDefault(); addRow();">
+<input type="file" id="ocrUploader" accept="image/*,.pdf" multiple onchange="handleFileUpload(event)">
+<form onsubmit="event.preventDefault(); addRowFromForm();">
   <input id="vendor" placeholder="Vendor">
   <input id="vendorEmail" placeholder="Vendor Email">
   <input id="po" placeholder="PO Number">
@@ -91,66 +91,81 @@ function toggleTheme() {
     : 'https://img.icons8.com/ios-glyphs/30/ffffff/moon-symbol.png';
 }
 
-function addRow(rowData = null) {
-  const vendor = rowData ? rowData.vendor : document.getElementById('vendor').value.trim();
-  const vendorEmail = rowData ? rowData.vendorEmail : document.getElementById('vendorEmail').value.trim();
-  const po = rowData ? rowData.po : document.getElementById('po').value.trim();
-  const material = rowData ? rowData.material : document.getElementById('material').value.trim();
-  const date = rowData ? rowData.date : document.getElementById('date').value;
-  const remarks = rowData ? rowData.remarks : document.getElementById('remarks').value.trim();
-  if (!vendor || !po || !material || !date) return alert("Please fill required fields");
+function addRow(data) {
+  const { vendor, vendorEmail, po, material, date, remarks } = data;
   const delivery = new Date(date);
-  const daysLeft = Math.ceil((delivery - new Date()) / (1000*60*60*24));
-  const status = daysLeft < 0 ? 'Delayed' : (daysLeft <= 3 ? 'Due Soon' : 'On Time');
+  const today = new Date();
+  const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
+  const status = daysLeft < 0 ? 'Delayed' : daysLeft <= 3 ? 'Due Soon' : 'On Time';
   const row = document.createElement('tr');
   if (status === 'Delayed') row.classList.add('delayed');
   else if (status === 'Due Soon') row.classList.add('due-soon');
-  row.innerHTML = `
-    <td>${vendor}</td>
-    <td>${vendorEmail}</td>
-    <td>${po}</td>
-    <td>${material}</td>
-    <td>${date}</td>
-    <td>${status}</td>
-    <td>${daysLeft}</td>
-    <td>${remarks}</td>`;
+  row.innerHTML = `<td>${vendor}</td><td>${vendorEmail}</td><td>${po}</td><td>${material}</td><td>${date}</td><td>${status}</td><td>${daysLeft}</td><td>${remarks}</td>`;
   document.getElementById('tableBody').appendChild(row);
-  updateDropdown();
-  updateChart();
-  if (!rowData) ['vendor','vendorEmail','po','material','date','remarks'].forEach(id => document.getElementById(id).value = '');
 }
 
-function updateDropdown() {
-  const dropdown = document.getElementById('vendorDropdown');
-  const vendors = new Set();
-  document.querySelectorAll('#tableBody tr').forEach(tr => vendors.add(tr.children[0].textContent));
-  dropdown.innerHTML = '<option value="">Select Vendor</option>' + [...vendors].map(v => `<option>${v}</option>`).join('');
+function addRowFromForm() {
+  const rowData = {
+    vendor: document.getElementById('vendor').value,
+    vendorEmail: document.getElementById('vendorEmail').value,
+    po: document.getElementById('po').value,
+    material: document.getElementById('material').value,
+    date: document.getElementById('date').value,
+    remarks: document.getElementById('remarks').value
+  };
+  addRow(rowData);
 }
 
-function updateChart() {
-  const data = { OnTime: 0, DueSoon: 0, Delayed: 0 };
-  document.querySelectorAll('#tableBody tr').forEach(tr => {
-    const status = tr.children[5].textContent;
-    if (status === 'Delayed') data.Delayed++;
-    else if (status === 'Due Soon') data.DueSoon++;
-    else data.OnTime++;
+function handleFileUpload(e) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    if (file.type === 'application/pdf') handlePDF(file);
+    else handleImage(file);
   });
-  const ctx = document.getElementById('statusChart').getContext('2d');
-  if (window.chartInstance) window.chartInstance.destroy();
-  window.chartInstance = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['On Time', 'Due Soon', 'Delayed'],
-      datasets: [{
-        label: 'PO Status Count',
-        data: [data.OnTime, data.DueSoon, data.Delayed],
-        backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
-        borderColor: '#aaa',
-        borderWidth: 1
-      }]
-    },
-    options: { responsive: true, plugins: { legend: { display: false } } }
+}
+
+function handleImage(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    recognizeText(reader.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function handlePDF(file) {
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const typedarray = new Uint8Array(reader.result);
+    const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      const viewport = page.getViewport({ scale: 2 });
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport }).promise;
+      const imageData = canvas.toDataURL('image/png');
+      recognizeText(imageData);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function recognizeText(imageData) {
+  Tesseract.recognize(imageData, 'eng').then(({ data: { text } }) => {
+    processOCRText(text);
   });
+}
+
+function processOCRText(text) {
+  const vendor = (text.match(/vendor[:\s-]+(.+)/i) || [,'Vendor Inc'])[1].trim();
+  const vendorEmail = (text.match(/[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}/) || ['vendor@example.com'])[0];
+  const po = (text.match(/po\s*(number)?[:#\s-]*([\w-]+)/i) || [,'','PO001'])[2];
+  const material = (text.match(/material[:\s-]+(.+)/i) || [,'Steel Rod'])[1].trim();
+  const date = (text.match(/\d{4}-\d{2}-\d{2}/) || [new Date().toISOString().slice(0,10)])[0];
+  const remarks = (text.match(/remarks[:\s-]+(.+)/i) || ['OCR Imported'])[1].trim();
+  addRow({ vendor, vendorEmail, po, material, date, remarks });
 }
 
 function exportExcel() {
@@ -158,7 +173,7 @@ function exportExcel() {
   document.querySelectorAll('#tableBody tr').forEach(tr => {
     csv += [...tr.children].map(td => td.textContent).join(',') + '\n';
   });
-  const blob = new Blob([csv], {type: 'text/csv'});
+  const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'po_data.csv'; a.click();
@@ -193,28 +208,6 @@ function generateEmailReminderFromDropdown() {
   msg += '\nWe appreciate your prompt attention to these matters.\n\nBest regards,\nAR PO Insight Team';
   document.getElementById('emailContent').value = msg;
   document.getElementById('emailPopup').style.display = 'block';
-}
-
-function handleBulkOCR(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = function () {
-      Tesseract.recognize(reader.result, 'eng')
-        .then(({ data: { text } }) => {
-          console.log("OCR Text:", text);
-          const vendor = (text.match(/Vendor\s*[:\-]?\s*(.+)/i) || [,'Vendor Inc'])[1].trim();
-          const vendorEmail = (text.match(/Email\s*[:\-]?\s*([\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,})/) || ['vendor@example.com'])[0];
-          const po = (text.match(/PO\s*(Number)?\s*[:\-]?\s*([\w-]+)/i) || [,'','PO001'])[2];
-          const material = (text.match(/Material\s*[:\-]?\s*(.+)/i) || [,'Steel Rod'])[1].trim();
-          const date = (text.match(/\d{4}-\d{2}-\d{2}/) || [new Date().toISOString().slice(0,10)])[0];
-          const remarks = (text.match(/Remarks\s*[:\-]?\s*(.+)/i) || ['OCR Imported'])[1].trim();
-          addRow({vendor, vendorEmail, po, material, date, remarks});
-        })
-        .catch(err => console.error('OCR failed:', err));
-    }
-    reader.readAsDataURL(file);
-  });
 }
 </script>
 </body>
