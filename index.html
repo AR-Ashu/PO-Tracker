@@ -1,4 +1,4 @@
-<!-- ENHANCED VERSION: PO Tracker with Export & Email Reminder Fixes -->
+<!-- ENHANCED VERSION: PO Tracker with Export & Email Reminder via Dropdown -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -75,7 +75,8 @@
     <input type="text" id="remarks" placeholder="Remarks">
     <button type="submit">Add PO</button>
     <button type="button" onclick="exportExcel()">Export to Excel</button>
-    <button type="button" onclick="generateEmailReminder()">Generate Email Reminder</button>
+    <select id="vendorDropdown"></select>
+    <button type="button" onclick="generateEmailReminderFromDropdown()">Generate Email Reminder</button>
   </form>
 </div>
 
@@ -95,6 +96,18 @@
 <script>
 const data = [];
 
+function updateVendorDropdown() {
+  const vendorList = [...new Set(data.map(r => r.vendor))];
+  const dropdown = document.getElementById('vendorDropdown');
+  dropdown.innerHTML = '<option value="">Select Vendor</option>';
+  vendorList.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    dropdown.appendChild(opt);
+  });
+}
+
 function addRow(rowData = null) {
   const vendor = rowData?.vendor || document.getElementById('vendor').value.trim();
   const vendorEmail = rowData?.vendorEmail || document.getElementById('vendorEmail').value.trim();
@@ -113,51 +126,14 @@ function addRow(rowData = null) {
     document.getElementById('remarks').value = "";
   }
   renderTable();
+  updateVendorDropdown();
 }
 
-function renderTable() {
-  const tbody = document.getElementById('tableBody');
-  tbody.innerHTML = "";
+function generateEmailReminderFromDropdown() {
+  const vendor = document.getElementById('vendorDropdown').value;
+  if (!vendor) return alert("Please select a vendor from dropdown");
   const today = new Date();
-  let onTime = 0, due = 0, delayed = 0;
-  data.forEach((row) => {
-    const tr = document.createElement('tr');
-    const delivery = new Date(row.date);
-    const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
-    let status = "On Time";
-    if (daysLeft < 0) { status = "Delayed"; tr.classList.add('delayed'); delayed++; }
-    else if (daysLeft <= 3) { status = "Due Soon"; tr.classList.add('due-soon'); due++; }
-    else { onTime++; }
-    tr.innerHTML = `<td>${row.vendor}</td><td>${row.vendorEmail || ''}</td><td>${row.po}</td><td>${row.material}</td><td>${row.date}</td><td>${status}</td><td>${daysLeft}</td><td>${row.remarks}</td>`;
-    tbody.appendChild(tr);
-  });
-  document.getElementById('countTotal').innerText = data.length;
-  document.getElementById('countOnTime').innerText = onTime;
-  document.getElementById('countDue').innerText = due;
-  document.getElementById('countDelayed').innerText = delayed;
-}
-
-function exportExcel() {
-  let csvContent = "data:text/csv;charset=utf-8,Vendor,Vendor Email,PO No,Material,Delivery Date,Remarks\n";
-  data.forEach(row => {
-    csvContent += `${row.vendor},${row.vendorEmail},${row.po},${row.material},${row.date},${row.remarks}\n`;
-  });
-  const encodedUri = encodeURI(csvContent);
-  const link = document.createElement("a");
-  link.setAttribute("href", encodedUri);
-  link.setAttribute("download", "PO_Data.csv");
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-}
-
-function generateEmailReminder() {
-  const vendorList = [...new Set(data.map(r => r.vendor))];
-  const vendor = prompt("Enter vendor name to send reminder to:\n" + vendorList.join("\n"));
-  if (!vendor) return;
-  const filtered = data.filter(r => r.vendor.toLowerCase() === vendor.toLowerCase());
-  if (!filtered.length) return alert("No records found for this vendor");
-  const today = new Date();
+  const filtered = data.filter(r => r.vendor === vendor);
   const delayed = filtered.filter(r => new Date(r.date) < today);
   const dueSoon = filtered.filter(r => {
     const daysLeft = Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24));
@@ -176,24 +152,6 @@ function generateEmailReminder() {
   body += `\nKindly ensure timely delivery and provide an update.\n\nRegards,\nAR PO Insight`;
   document.getElementById("emailContent").value = body;
   document.getElementById("emailPopup").style.display = "block";
-}
-
-function handleBulkOCR(event) {
-  const files = Array.from(event.target.files);
-  if (!files.length) return;
-  files.forEach(file => {
-    Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
-      const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-      const email = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/.exec(text)?.[0];
-      const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-      const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-      const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
-      const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
-      if (vendor && po && material && date) {
-        addRow({ vendor, vendorEmail: email, po, material, date, remarks: remarks || '' });
-      }
-    });
-  });
 }
 </script>
 </body>
