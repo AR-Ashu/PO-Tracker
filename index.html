@@ -1,4 +1,4 @@
-<!-- ENHANCED VERSION: PO Tracker with Email Extraction & Reminder Generator -->
+<!-- ENHANCED VERSION: PO Tracker with Export & Email Reminder Fixes -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,7 +66,7 @@
 
 <div>
   <input type="file" id="ocrUploader" accept="image/*" multiple onchange="handleBulkOCR(event)">
-  <form id="poForm">
+  <form id="poForm" onsubmit="event.preventDefault(); addRow();">
     <input type="text" id="vendor" placeholder="Vendor Name">
     <input type="email" id="vendorEmail" placeholder="Vendor Email">
     <input type="text" id="po" placeholder="PO Number">
@@ -95,7 +95,7 @@
 <script>
 const data = [];
 
-function addRow(rowData) {
+function addRow(rowData = null) {
   const vendor = rowData?.vendor || document.getElementById('vendor').value.trim();
   const vendorEmail = rowData?.vendorEmail || document.getElementById('vendorEmail').value.trim();
   const po = rowData?.po || document.getElementById('po').value.trim();
@@ -135,6 +135,47 @@ function renderTable() {
   document.getElementById('countOnTime').innerText = onTime;
   document.getElementById('countDue').innerText = due;
   document.getElementById('countDelayed').innerText = delayed;
+}
+
+function exportExcel() {
+  let csvContent = "data:text/csv;charset=utf-8,Vendor,Vendor Email,PO No,Material,Delivery Date,Remarks\n";
+  data.forEach(row => {
+    csvContent += `${row.vendor},${row.vendorEmail},${row.po},${row.material},${row.date},${row.remarks}\n`;
+  });
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", "PO_Data.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function generateEmailReminder() {
+  const vendorList = [...new Set(data.map(r => r.vendor))];
+  const vendor = prompt("Enter vendor name to send reminder to:\n" + vendorList.join("\n"));
+  if (!vendor) return;
+  const filtered = data.filter(r => r.vendor.toLowerCase() === vendor.toLowerCase());
+  if (!filtered.length) return alert("No records found for this vendor");
+  const today = new Date();
+  const delayed = filtered.filter(r => new Date(r.date) < today);
+  const dueSoon = filtered.filter(r => {
+    const daysLeft = Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24));
+    return daysLeft <= 3 && daysLeft >= 0;
+  });
+  if (!delayed.length && !dueSoon.length) return alert("No pending/due soon POs for this vendor");
+  let body = `Dear ${vendor},\n\nThe following Purchase Orders require your attention:\n`;
+  delayed.forEach(r => {
+    const days = Math.abs(Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24)));
+    body += `- PO #${r.po} | Delivery Date: ${r.date} | Delayed by ${days} days\n`;
+  });
+  dueSoon.forEach(r => {
+    const days = Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24));
+    body += `- PO #${r.po} | Delivery Date: ${r.date} | Due Soon (in ${days} days)\n`;
+  });
+  body += `\nKindly ensure timely delivery and provide an update.\n\nRegards,\nAR PO Insight`;
+  document.getElementById("emailContent").value = body;
+  document.getElementById("emailPopup").style.display = "block";
 }
 
 function handleBulkOCR(event) {
