@@ -1,4 +1,4 @@
-<!-- ENHANCED VERSION: PO Tracker with Export & Email Reminder via Dropdown -->
+<!-- FINAL ENHANCED VERSION: PO Tracker with OCR, Export, Email Reminder -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,129 +6,122 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AR PO Insight</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    :root {
-      --bg: #111; --fg: #eee; --input-bg: #222; --input-border: #444; --accent: #00ffe7;
-    }
-    [data-theme="light"] {
-      --bg: #f7f7f7; --fg: #111; --input-bg: #fff; --input-border: #ccc; --accent: #0077cc;
-    }
-    body {
-      background: var(--bg); color: var(--fg); font-family: Arial, sans-serif; margin: 0; padding: 20px;
-    }
-    h1 { color: var(--accent); text-align: center; }
-    input, select, button {
-      padding: 10px; margin: 5px; background: var(--input-bg); color: var(--fg); border: 1px solid var(--input-border);
-    }
+    body { font-family: Arial; background: #111; color: #eee; margin: 0; padding: 20px; }
+    input, button, select { padding: 8px; margin: 5px; background: #222; color: #eee; border: 1px solid #444; }
     table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-    th, td { padding: 10px; border: 1px solid var(--input-border); }
-    .delayed { background: #ff3c3c33; } .due-soon { background: #ffc10733; }
-    .dashboard { margin: 20px 0; background: var(--input-bg); padding: 10px; border-radius: 10px; text-align: center; }
-    #themeToggle { position: fixed; top: 10px; right: 10px; }
-    #clock { position: fixed; top: 10px; left: 10px; font-weight: bold; }
+    th, td { padding: 10px; border: 1px solid #444; }
+    .delayed { background-color: #ff000030; }
+    .due-soon { background-color: #ffff0030; }
     #emailPopup {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--input-bg);
-      color: var(--fg);
-      padding: 20px;
-      border: 1px solid var(--input-border);
-      border-radius: 10px;
-      z-index: 999;
-      display: none;
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: #222; color: #eee; padding: 20px; border: 1px solid #444; display: none; z-index: 10;
     }
-    #emailPopup textarea {
-      width: 100%;
-      height: 200px;
-      margin-top: 10px;
-      background: var(--bg);
-      color: var(--fg);
-      border: 1px solid var(--input-border);
-    }
+    #emailPopup textarea { width: 100%; height: 200px; background: #111; color: #eee; }
   </style>
 </head>
 <body>
-<div id="clock"></div>
-<button id="themeToggle" onclick="toggleTheme()">🌙 Toggle Theme</button>
 <h1>AR PO Insight</h1>
-
-<div class="dashboard">
-  <strong>Total POs:</strong> <span id="countTotal">0</span> |
-  <strong>On Time:</strong> <span id="countOnTime">0</span> |
-  <strong>Due Soon:</strong> <span id="countDue">0</span> |
-  <strong>Delayed:</strong> <span id="countDelayed">0</span>
-</div>
-
-<canvas id="poChart" style="max-height:300px"></canvas>
-
-<div>
-  <input type="file" id="ocrUploader" accept="image/*" multiple onchange="handleBulkOCR(event)">
-  <form id="poForm" onsubmit="event.preventDefault(); addRow();">
-    <input type="text" id="vendor" placeholder="Vendor Name">
-    <input type="email" id="vendorEmail" placeholder="Vendor Email">
-    <input type="text" id="po" placeholder="PO Number">
-    <input type="text" id="material" placeholder="Material">
-    <input type="date" id="date">
-    <input type="text" id="remarks" placeholder="Remarks">
-    <button type="submit">Add PO</button>
-    <button type="button" onclick="exportExcel()">Export to Excel</button>
-    <select id="vendorDropdown"></select>
-    <button type="button" onclick="generateEmailReminderFromDropdown()">Generate Email Reminder</button>
-  </form>
-</div>
-
+<input type="file" id="ocrUploader" accept="image/*" multiple onchange="handleBulkOCR(event)">
+<form onsubmit="event.preventDefault(); addRow();">
+  <input id="vendor" placeholder="Vendor">
+  <input id="vendorEmail" placeholder="Vendor Email">
+  <input id="po" placeholder="PO Number">
+  <input id="material" placeholder="Material">
+  <input id="date" type="date">
+  <input id="remarks" placeholder="Remarks">
+  <button type="submit">Add PO</button>
+  <button type="button" onclick="exportExcel()">Export to Excel</button>
+  <select id="vendorDropdown"></select>
+  <button type="button" onclick="generateEmailReminderFromDropdown()">Generate Email</button>
+</form>
 <div id="emailPopup">
-  <strong>Email Content:</strong>
-  <textarea readonly id="emailContent"></textarea>
+  <textarea id="emailContent" readonly></textarea>
   <button onclick="document.getElementById('emailPopup').style.display='none'">Close</button>
 </div>
-
 <table>
   <thead>
-    <tr><th>Vendor</th><th>Vendor Email</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>Days Left</th><th>Remarks</th></tr>
+    <tr><th>Vendor</th><th>Vendor Email</th><th>PO No</th><th>Material</th><th>Delivery</th><th>Status</th><th>Days Left</th><th>Remarks</th></tr>
   </thead>
   <tbody id="tableBody"></tbody>
 </table>
-
 <script>
+function addRow(rowData = null) {
+  const vendor = rowData ? rowData.vendor : document.getElementById('vendor').value.trim();
+  const vendorEmail = rowData ? rowData.vendorEmail : document.getElementById('vendorEmail').value.trim();
+  const po = rowData ? rowData.po : document.getElementById('po').value.trim();
+  const material = rowData ? rowData.material : document.getElementById('material').value.trim();
+  const date = rowData ? rowData.date : document.getElementById('date').value;
+  const remarks = rowData ? rowData.remarks : document.getElementById('remarks').value.trim();
+  if (!vendor || !po || !material || !date) return alert("Please fill required fields");
+  const delivery = new Date(date);
+  const daysLeft = Math.ceil((delivery - new Date()) / (1000*60*60*24));
+  const status = daysLeft < 0 ? 'Delayed' : (daysLeft <= 3 ? 'Due Soon' : 'On Time');
+  const row = document.createElement('tr');
+  if (status === 'Delayed') row.classList.add('delayed');
+  else if (status === 'Due Soon') row.classList.add('due-soon');
+  row.innerHTML = `
+    <td>${vendor}</td>
+    <td>${vendorEmail}</td>
+    <td>${po}</td>
+    <td>${material}</td>
+    <td>${date}</td>
+    <td>${status}</td>
+    <td>${daysLeft}</td>
+    <td>${remarks}</td>`;
+  document.getElementById('tableBody').appendChild(row);
+  updateDropdown();
+  if (!rowData) ['vendor','vendorEmail','po','material','date','remarks'].forEach(id => document.getElementById(id).value = '');
+}
+function updateDropdown() {
+  const dropdown = document.getElementById('vendorDropdown');
+  const vendors = new Set();
+  document.querySelectorAll('#tableBody tr').forEach(tr => vendors.add(tr.children[0].textContent));
+  dropdown.innerHTML = '<option value="">Select Vendor</option>' + [...vendors].map(v => `<option>${v}</option>`).join('');
+}
 function exportExcel() {
-  let csv = 'Vendor,Vendor Email,PO No,Material,Delivery Date,Status,Days Left,Remarks\n';
-  document.querySelectorAll('#tableBody tr').forEach(row => {
-    const cells = Array.from(row.children).map(td => td.textContent);
-    csv += cells.join(',') + '\n';
+  let csv = 'Vendor,Email,PO,Material,Date,Status,Days Left,Remarks\n';
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    csv += [...tr.children].map(td => td.textContent).join(',') + '\n';
   });
-  const blob = new Blob([csv], { type: 'text/csv' });
+  const blob = new Blob([csv], {type: 'text/csv'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'po_data.csv';
-  a.click();
+  a.href = url; a.download = 'po_data.csv'; a.click();
   URL.revokeObjectURL(url);
 }
-
 function generateEmailReminderFromDropdown() {
-  const selectedVendor = document.getElementById('vendorDropdown').value;
-  if (!selectedVendor) return alert("Select a vendor first.");
-  let rows = Array.from(document.querySelectorAll('#tableBody tr'));
-  let emailBody = `Dear ${selectedVendor},\n\nThe following POs are either due soon or delayed:\n\n`;
-  rows.forEach(row => {
-    if (row.children[0].textContent === selectedVendor && (row.children[5].textContent === 'Due Soon' || row.children[5].textContent === 'Delayed')) {
-      emailBody += `- PO: ${row.children[2].textContent}, Material: ${row.children[3].textContent}, Delivery: ${row.children[4].textContent}, Status: ${row.children[5].textContent}\n`;
+  const vendor = document.getElementById('vendorDropdown').value;
+  if (!vendor) return alert("Select vendor");
+  let msg = `Dear ${vendor},\n\nThe following POs are due soon or delayed:\n\n`;
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    if (tr.children[0].textContent === vendor && ['Delayed','Due Soon'].includes(tr.children[5].textContent)) {
+      msg += `- PO ${tr.children[2].textContent} (${tr.children[3].textContent}), Delivery ${tr.children[4].textContent}\n`;
     }
   });
-  emailBody += '\nKindly take the necessary action.\n\nRegards,\nAR PO Insight Team';
-  document.getElementById('emailContent').value = emailBody;
+  msg += '\nPlease check on this.\n\nRegards,\nAR PO Insight';
+  document.getElementById('emailContent').value = msg;
   document.getElementById('emailPopup').style.display = 'block';
 }
-
-function updateVendorDropdown() {
-  const vendorDropdown = document.getElementById('vendorDropdown');
-  const vendors = new Set();
-  document.querySelectorAll('#tableBody tr').forEach(row => vendors.add(row.children[0].textContent));
-  vendorDropdown.innerHTML = '<option value="">Select Vendor</option>' + [...vendors].map(v => `<option>${v}</option>`).join('');
+function handleBulkOCR(e) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function () {
+      Tesseract.recognize(reader.result, 'eng')
+        .then(({ data: { text } }) => {
+          const vendor = (text.match(/vendor[:\s]+(.+)/i) || [,'Vendor Inc'])[1].trim();
+          const vendorEmail = (text.match(/([\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,})/) || [,''])[1];
+          const po = (text.match(/po\s*(number)?[:#\s]*([\w-]+)/i) || [,'','PO001'])[2];
+          const material = (text.match(/material[:\s]+(.+)/i) || [,'Steel Rod'])[1].trim();
+          const date = (text.match(/\d{4}-\d{2}-\d{2}/) || [new Date().toISOString().slice(0,10)])[0];
+          const remarks = 'OCR Imported';
+          addRow({vendor, vendorEmail, po, material, date, remarks});
+        })
+        .catch(err => console.error('OCR failed:', err));
+    }
+    reader.readAsDataURL(file);
+  });
 }
 </script>
 </body>
