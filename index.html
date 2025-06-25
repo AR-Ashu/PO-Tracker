@@ -6,7 +6,7 @@
   <title>AR PO Insight</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.0.0-alpha.17/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
   <style>
     :root {
       --bg: #111;
@@ -138,26 +138,26 @@ function handlePDF(file) {
     const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2 });
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
-      const viewport = page.getViewport({ scale: 2 });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       await page.render({ canvasContext: context, viewport }).promise;
       const imageData = canvas.toDataURL('image/png');
-      recognizeText(imageData);
+      await recognizeText(imageData);
     }
   };
   reader.readAsArrayBuffer(file);
 }
 
-function recognizeText(imageData) {
-  Tesseract.recognize(imageData, 'eng', { logger: m => console.log(m) })
-    .then(({ data: { text } }) => {
-      console.log("Extracted Text:", text);
-      processOCRText(text);
-    })
-    .catch(err => console.error("OCR Error:", err));
+async function recognizeText(imageData) {
+  try {
+    const result = await Tesseract.recognize(imageData, 'eng');
+    processOCRText(result.data.text);
+  } catch (err) {
+    console.error("OCR Error:", err);
+  }
 }
 
 function processOCRText(text) {
@@ -168,7 +168,6 @@ function processOCRText(text) {
   const material = (clean.match(/(?:material|item|description|product)[:\s-]+(.+)/i) || [,'Unknown Material'])[1].trim();
   const date = (clean.match(/(?:delivery|due|expected|ship)[\s-]*date[:\s-]*([0-9]{4}-[0-9]{2}-[0-9]{2})/i) || clean.match(/\b(\d{4}-\d{2}-\d{2})\b/) || [new Date().toISOString().slice(0,10)])[1];
   const remarks = (clean.match(/(?:remarks|notes|comments)[:\s-]+(.+)/i) || ['OCR Auto Extracted'])[1].trim();
-  console.log("Parsed:", { vendor, vendorEmail, po, material, date, remarks });
   addRow({ vendor, vendorEmail, po, material, date, remarks });
 }
 
