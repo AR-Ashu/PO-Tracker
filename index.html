@@ -1,4 +1,4 @@
-<!-- ENHANCED VERSION: PO Tracker with Export, Live Clock (12hr), Bulk OCR & Chart -->
+<!-- ENHANCED VERSION: PO Tracker with Email Extraction & Reminder Generator -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -47,18 +47,20 @@
   <input type="file" id="ocrUploader" accept="image/*" multiple onchange="handleBulkOCR(event)">
   <form id="poForm">
     <input type="text" id="vendor" placeholder="Vendor Name">
+    <input type="email" id="vendorEmail" placeholder="Vendor Email">
     <input type="text" id="po" placeholder="PO Number">
     <input type="text" id="material" placeholder="Material">
     <input type="date" id="date">
     <input type="text" id="remarks" placeholder="Remarks">
     <button type="submit">Add PO</button>
     <button type="button" onclick="exportExcel()">Export to Excel</button>
+    <button type="button" onclick="generateEmailReminder()">Generate Email Reminder</button>
   </form>
 </div>
 
 <table>
   <thead>
-    <tr><th>Vendor</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>Days Left</th><th>Remarks</th></tr>
+    <tr><th>Vendor</th><th>Vendor Email</th><th>PO No</th><th>Material</th><th>Delivery Date</th><th>Status</th><th>Days Left</th><th>Remarks</th></tr>
   </thead>
   <tbody id="tableBody"></tbody>
 </table>
@@ -98,15 +100,17 @@
 
   function addRow(rowData) {
     const vendor = rowData?.vendor || document.getElementById('vendor').value.trim();
+    const vendorEmail = rowData?.vendorEmail || document.getElementById('vendorEmail').value.trim();
     const po = rowData?.po || document.getElementById('po').value.trim();
     const material = rowData?.material || document.getElementById('material').value.trim();
     const date = rowData?.date || document.getElementById('date').value;
     const remarks = rowData?.remarks || document.getElementById('remarks').value.trim();
     if (!vendor || !po || !material || !date) return alert("Please fill all fields.");
 
-    data.push({ vendor, po, material, date, remarks });
+    data.push({ vendor, vendorEmail, po, material, date, remarks });
     if (!rowData) {
       document.getElementById('vendor').value = "";
+      document.getElementById('vendorEmail').value = "";
       document.getElementById('po').value = "";
       document.getElementById('material').value = "";
       document.getElementById('date').value = "";
@@ -130,7 +134,7 @@
       else if (daysLeft <= 3) { status = "Due Soon"; tr.classList.add('due-soon'); due++; }
       else { onTime++; }
 
-      tr.innerHTML = `<td>${row.vendor}</td><td>${row.po}</td><td>${row.material}</td><td>${row.date}</td><td>${status}</td><td>${daysLeft}</td><td>${row.remarks}</td>`;
+      tr.innerHTML = `<td>${row.vendor}</td><td>${row.vendorEmail || ''}</td><td>${row.po}</td><td>${row.material}</td><td>${row.date}</td><td>${status}</td><td>${daysLeft}</td><td>${row.remarks}</td>`;
       tbody.appendChild(tr);
     });
 
@@ -144,13 +148,13 @@
   }
 
   function exportExcel() {
-    let csv = 'Vendor,PO No,Material,Delivery Date,Status,Days Left,Remarks\n';
+    let csv = 'Vendor,Vendor Email,PO No,Material,Delivery Date,Status,Days Left,Remarks\n';
     const today = new Date();
     data.forEach(row => {
       const delivery = new Date(row.date);
       const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
       let status = daysLeft < 0 ? "Delayed" : daysLeft <= 3 ? "Due Soon" : "On Time";
-      csv += `${row.vendor},${row.po},${row.material},${row.date},${status},${daysLeft},${row.remarks}\n`;
+      csv += `${row.vendor},${row.vendorEmail},${row.po},${row.material},${row.date},${status},${daysLeft},${row.remarks}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -159,18 +163,54 @@
     a.click(); URL.revokeObjectURL(url);
   }
 
+  function generateEmailReminder() {
+    const vendorList = [...new Set(data.map(r => r.vendor))];
+    const vendor = prompt("Enter vendor name to send reminder to:\n" + vendorList.join("\n"));
+    if (!vendor) return;
+
+    const filtered = data.filter(r => r.vendor.toLowerCase() === vendor.toLowerCase());
+    if (!filtered.length) return alert("No records found for this vendor");
+
+    const today = new Date();
+    const delayed = filtered.filter(r => new Date(r.date) < today);
+    const dueSoon = filtered.filter(r => {
+      const daysLeft = Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24));
+      return daysLeft <= 3 && daysLeft >= 0;
+    });
+
+    if (!delayed.length && !dueSoon.length) return alert("No pending/due soon POs for this vendor");
+
+    let body = `Dear ${vendor},%0D%0A%0D%0AThe following Purchase Orders require your attention:%0D%0A`;
+    delayed.forEach(r => {
+      const days = Math.abs(Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24)));
+      body += `- PO #${r.po} | Delivery Date: ${r.date} | Delayed by ${days} days%0D%0A`;
+    });
+    dueSoon.forEach(r => {
+      const days = Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24));
+      body += `- PO #${r.po} | Delivery Date: ${r.date} | Due Soon (in ${days} days)%0D%0A`;
+    });
+
+    body += `%0D%0AKindly ensure timely delivery and provide an update.%0D%0A%0D%0ARegards,%0D%0AAR PO Insight`;
+
+    const email = filtered.find(r => r.vendorEmail)?.vendorEmail || '';
+    const subject = `Reminder: Pending or Near-Due POs`;
+    const mailto = `mailto:${email}?subject=${subject}&body=${body}`;
+    window.location.href = mailto;
+  }
+
   function handleBulkOCR(event) {
     const files = Array.from(event.target.files);
     if (!files.length) return;
     files.forEach(file => {
       Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
         const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+        const email = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/.exec(text)?.[0];
         const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
         const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
         const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
         const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
         if (vendor && po && material && date) {
-          addRow({ vendor, po, material, date, remarks: remarks || '' });
+          addRow({ vendor, vendorEmail: email, po, material, date, remarks: remarks || '' });
         }
       });
     });
@@ -178,4 +218,3 @@
 </script>
 </body>
 </html>
-
