@@ -1,4 +1,4 @@
-<!-- FINAL ENHANCED VERSION: PO Tracker with OCR, Export, Email Reminder -->
+<!-- FINAL ENHANCED VERSION: PO Tracker with OCR, Export, Email Reminder, Theme Toggle, Chart -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,22 +6,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AR PO Insight</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.4/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial; background: #111; color: #eee; margin: 0; padding: 20px; }
-    input, button, select { padding: 8px; margin: 5px; background: #222; color: #eee; border: 1px solid #444; }
+    :root {
+      --bg: #111;
+      --text: #eee;
+      --input-bg: #222;
+      --border: #444;
+    }
+    body.light {
+      --bg: #f7f7f7;
+      --text: #111;
+      --input-bg: #fff;
+      --border: #ccc;
+    }
+    body {
+      font-family: Arial; background: var(--bg); color: var(--text); margin: 0; padding: 20px;
+    }
+    input, button, select {
+      padding: 8px; margin: 5px; background: var(--input-bg); color: var(--text); border: 1px solid var(--border);
+    }
     table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-    th, td { padding: 10px; border: 1px solid #444; }
+    th, td { padding: 10px; border: 1px solid var(--border); }
     .delayed { background-color: #ff000030; }
     .due-soon { background-color: #ffff0030; }
     #emailPopup {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: #222; color: #eee; padding: 20px; border: 1px solid #444; display: none; z-index: 10;
+      background: var(--input-bg); color: var(--text); padding: 20px; border: 1px solid var(--border); display: none; z-index: 10;
     }
-    #emailPopup textarea { width: 100%; height: 200px; background: #111; color: #eee; }
+    #emailPopup textarea { width: 100%; height: 200px; background: var(--bg); color: var(--text); }
+    #toggleTheme { position: fixed; top: 10px; right: 10px; }
   </style>
 </head>
 <body>
+<button id="toggleTheme" onclick="toggleTheme()">Toggle Theme</button>
 <h1>AR PO Insight</h1>
+<canvas id="statusChart" height="100"></canvas>
 <input type="file" id="ocrUploader" accept="image/*" multiple onchange="handleBulkOCR(event)">
 <form onsubmit="event.preventDefault(); addRow();">
   <input id="vendor" placeholder="Vendor">
@@ -46,6 +66,33 @@
   <tbody id="tableBody"></tbody>
 </table>
 <script>
+let chart;
+function toggleTheme() {
+  document.body.classList.toggle('light');
+}
+function updateChart() {
+  const data = { OnTime: 0, DueSoon: 0, Delayed: 0 };
+  document.querySelectorAll('#tableBody tr').forEach(tr => {
+    const status = tr.children[5].textContent;
+    if (status === 'Delayed') data.Delayed++;
+    else if (status === 'Due Soon') data.DueSoon++;
+    else data.OnTime++;
+  });
+  const ctx = document.getElementById('statusChart').getContext('2d');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['On Time', 'Due Soon', 'Delayed'],
+      datasets: [{
+        label: 'PO Status Count',
+        data: [data.OnTime, data.DueSoon, data.Delayed],
+        backgroundColor: ['#28a745', '#ffc107', '#dc3545']
+      }]
+    },
+    options: { responsive: true, plugins: { legend: { display: false } } }
+  });
+}
 function addRow(rowData = null) {
   const vendor = rowData ? rowData.vendor : document.getElementById('vendor').value.trim();
   const vendorEmail = rowData ? rowData.vendorEmail : document.getElementById('vendorEmail').value.trim();
@@ -71,6 +118,7 @@ function addRow(rowData = null) {
     <td>${remarks}</td>`;
   document.getElementById('tableBody').appendChild(row);
   updateDropdown();
+  updateChart();
   if (!rowData) ['vendor','vendorEmail','po','material','date','remarks'].forEach(id => document.getElementById(id).value = '');
 }
 function updateDropdown() {
