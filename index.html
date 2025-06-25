@@ -94,76 +94,41 @@
 </table>
 
 <script>
-function addRow(rowData = null) {
-  const vendor = rowData ? rowData.vendor : document.getElementById('vendor').value.trim();
-  const vendorEmail = rowData ? rowData.vendorEmail : document.getElementById('vendorEmail').value.trim();
-  const po = rowData ? rowData.po : document.getElementById('po').value.trim();
-  const material = rowData ? rowData.material : document.getElementById('material').value.trim();
-  const date = rowData ? rowData.date : document.getElementById('date').value;
-  const remarks = rowData ? rowData.remarks : document.getElementById('remarks').value.trim();
-  if (!vendor || !po || !material || !date) return alert("Please fill all fields.");
-
-  const today = new Date();
-  const delivery = new Date(date);
-  const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
-  let status = 'On Time';
-  if (daysLeft < 0) status = 'Delayed';
-  else if (daysLeft <= 3) status = 'Due Soon';
-
-  const row = document.createElement('tr');
-  if (status === 'Delayed') row.classList.add('delayed');
-  else if (status === 'Due Soon') row.classList.add('due-soon');
-
-  row.innerHTML = `
-    <td>${vendor}</td>
-    <td>${vendorEmail}</td>
-    <td>${po}</td>
-    <td>${material}</td>
-    <td>${date}</td>
-    <td>${status}</td>
-    <td>${daysLeft}</td>
-    <td>${remarks}</td>
-  `;
-  document.getElementById('tableBody').appendChild(row);
-  updateCounts();
-  updateVendorDropdown();
-  if (!rowData) {
-    document.getElementById('vendor').value = "";
-    document.getElementById('vendorEmail').value = "";
-    document.getElementById('po').value = "";
-    document.getElementById('material').value = "";
-    document.getElementById('date').value = "";
-    document.getElementById('remarks').value = "";
-  }
+function exportExcel() {
+  let csv = 'Vendor,Vendor Email,PO No,Material,Delivery Date,Status,Days Left,Remarks\n';
+  document.querySelectorAll('#tableBody tr').forEach(row => {
+    const cells = Array.from(row.children).map(td => td.textContent);
+    csv += cells.join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'po_data.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
-function handleBulkOCR(event) {
-  const files = Array.from(event.target.files);
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = function () {
-      Tesseract.recognize(reader.result, 'eng')
-        .then(({ data: { text } }) => {
-          const vendorMatch = text.match(/vendor[:\s]+(.+)/i);
-          const emailMatch = text.match(/([\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,})/);
-          const poMatch = text.match(/po\s*number[:\s#]*([\w-]+)/i);
-          const materialMatch = text.match(/material[:\s]+(.+)/i);
-          const dateMatch = text.match(/(\d{4}-\d{2}-\d{2})/);
-          const remarks = 'From OCR';
-          const rowData = {
-            vendor: vendorMatch ? vendorMatch[1].trim() : 'OCR Vendor',
-            vendorEmail: emailMatch ? emailMatch[1].trim() : '',
-            po: poMatch ? poMatch[1].trim() : 'PO1234',
-            material: materialMatch ? materialMatch[1].trim() : 'Material A',
-            date: dateMatch ? dateMatch[1].trim() : new Date().toISOString().slice(0,10),
-            remarks: remarks
-          };
-          addRow(rowData);
-        })
-        .catch(err => console.error('OCR Error:', err));
-    };
-    reader.readAsDataURL(file);
+function generateEmailReminderFromDropdown() {
+  const selectedVendor = document.getElementById('vendorDropdown').value;
+  if (!selectedVendor) return alert("Select a vendor first.");
+  let rows = Array.from(document.querySelectorAll('#tableBody tr'));
+  let emailBody = `Dear ${selectedVendor},\n\nThe following POs are either due soon or delayed:\n\n`;
+  rows.forEach(row => {
+    if (row.children[0].textContent === selectedVendor && (row.children[5].textContent === 'Due Soon' || row.children[5].textContent === 'Delayed')) {
+      emailBody += `- PO: ${row.children[2].textContent}, Material: ${row.children[3].textContent}, Delivery: ${row.children[4].textContent}, Status: ${row.children[5].textContent}\n`;
+    }
   });
+  emailBody += '\nKindly take the necessary action.\n\nRegards,\nAR PO Insight Team';
+  document.getElementById('emailContent').value = emailBody;
+  document.getElementById('emailPopup').style.display = 'block';
+}
+
+function updateVendorDropdown() {
+  const vendorDropdown = document.getElementById('vendorDropdown');
+  const vendors = new Set();
+  document.querySelectorAll('#tableBody tr').forEach(row => vendors.add(row.children[0].textContent));
+  vendorDropdown.innerHTML = '<option value="">Select Vendor</option>' + [...vendors].map(v => `<option>${v}</option>`).join('');
 }
 </script>
 </body>
