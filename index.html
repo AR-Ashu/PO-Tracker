@@ -6,6 +6,7 @@
   <title>AR PO Insight</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.0.0-alpha.17/dist/tesseract.min.js"></script>
   <style>
     :root {
       --bg: #111;
@@ -126,9 +127,7 @@ function handleFileUpload(e) {
 
 function handleImage(file) {
   const reader = new FileReader();
-  reader.onload = () => {
-    recognizeText(reader.result);
-  };
+  reader.onload = () => recognizeText(reader.result);
   reader.readAsDataURL(file);
 }
 
@@ -153,9 +152,12 @@ function handlePDF(file) {
 }
 
 function recognizeText(imageData) {
-  Tesseract.recognize(imageData, 'eng').then(({ data: { text } }) => {
-    processOCRText(text);
-  });
+  Tesseract.recognize(imageData, 'eng', { logger: m => console.log(m) })
+    .then(({ data: { text } }) => {
+      console.log("Extracted Text:", text);
+      processOCRText(text);
+    })
+    .catch(err => console.error("OCR Error:", err));
 }
 
 function processOCRText(text) {
