@@ -161,6 +161,7 @@ function exportExcel() {
   a.href = url; a.download = 'po_data.csv'; a.click();
   URL.revokeObjectURL(url);
 }
+// ... [same previous HTML/CSS part above unchanged]
 function generateEmailReminderFromDropdown() {
   const vendor = document.getElementById('vendorDropdown').value;
   if (!vendor) return alert("Select vendor");
@@ -168,20 +169,27 @@ function generateEmailReminderFromDropdown() {
   let msg = `Dear ${vendor},\n\nWe hope this message finds you well. Please find below a summary of your Purchase Orders that require your attention:\n\n`;
 
   const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
   document.querySelectorAll('#tableBody tr').forEach(tr => {
     if (tr.children[0].textContent === vendor) {
       const po = tr.children[2].textContent;
       const material = tr.children[3].textContent;
       const deliveryDateStr = tr.children[4].textContent;
       const delivery = new Date(deliveryDateStr);
+      const status = tr.children[5].textContent;
+
       const diffInMs = delivery - today;
       const daysLeft = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
-      const status = tr.children[5].textContent;
 
       if (status === 'Delayed') {
         msg += `- PO ${po} (${material}) was due on ${deliveryDateStr} and is currently delayed by ${Math.abs(daysLeft)} day(s). Kindly take necessary action.\n`;
       } else if (status === 'Due Soon') {
-        msg += `- PO ${po} (${material}) is scheduled for delivery on ${deliveryDateStr}, which is within the next ${daysLeft} day(s). Please ensure timely processing.\n`;
+        if (deliveryDateStr === todayStr) {
+          msg += `- PO ${po} (${material}) is scheduled for delivery today (${deliveryDateStr}). Please ensure timely processing.\n`;
+        } else {
+          msg += `- PO ${po} (${material}) is scheduled for delivery on ${deliveryDateStr}, which is within the next ${daysLeft} day(s). Please ensure timely processing.\n`;
+        }
       }
     }
   });
@@ -190,6 +198,8 @@ function generateEmailReminderFromDropdown() {
   document.getElementById('emailContent').value = msg;
   document.getElementById('emailPopup').style.display = 'block';
 }
+// ... [rest of the JS remains unchanged]
+
 
 function handleBulkOCR(e) {
   const files = Array.from(e.target.files);
