@@ -8,202 +8,145 @@
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
   <style>
-    body { background: #111; color: #eee; font-family: Arial; padding: 20px; }
-    input, button, select { padding: 8px; margin: 5px; background: #222; color: #eee; border: 1px solid #444; }
-    table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-    th, td { padding: 10px; border: 1px solid #444; }
+    :root {
+      --bg: #111;
+      --text: #eee;
+      --input-bg: #222;
+      --border: #444;
+    }
+
+    body.light {
+      --bg: #f7f7f7;
+      --text: #111;
+      --input-bg: #fff;
+      --border: #ccc;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    input, button, select {
+      padding: 8px;
+      margin: 5px;
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 10px;
+      border: 1px solid var(--border);
+    }
+
     .delayed { background-color: #ff000030; }
     .due-soon { background-color: #ffff0030; }
-    #statusChart { max-width: 600px; margin: 20px auto; }
-    #emailPopup { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #222; padding: 20px; border: 1px solid #444; z-index: 10; width: 90%; max-width: 500px; }
-    #emailPopup textarea { width: 100%; height: 200px; background: #111; color: #eee; }
+
+    #statusChart {
+      max-width: 600px;
+      margin: 20px auto;
+    }
+
+    #emailPopup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--input-bg);
+      padding: 20px;
+      border: 1px solid var(--border);
+      z-index: 10;
+      width: 90%;
+      max-width: 500px;
+    }
+
+    #emailPopup textarea {
+      width: 100%;
+      height: 200px;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    #clock {
+      font-size: 14px;
+    }
+
+    h1 {
+      text-align: center;
+      flex: 1;
+      margin: 0;
+    }
+
+    #toggleThemeIcon {
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+
+    #toggleThemeIcon img {
+      width: 24px;
+      height: 24px;
+    }
   </style>
 </head>
 <body>
+  <header>
+    <div id="clock"></div>
+    <h1>AR PO Insight</h1>
+    <button id="toggleThemeIcon" onclick="toggleTheme()">
+      <img id="themeIcon" src="https://img.icons8.com/ios-glyphs/30/ffffff/moon-symbol.png" alt="Theme Icon">
+    </button>
+  </header>
 
-<h1>AR PO Insight</h1>
+  <!-- Your existing content -->
+  <!-- Just copy-paste your working logic for table, chart, OCR, etc., below here -->
 
-<canvas id="statusChart" height="100"></canvas>
-<input type="file" id="ocrUploader" accept="image/*,.pdf" multiple onchange="handleFileUpload(event)"/>
-
-<form onsubmit="event.preventDefault(); addRowFromForm();">
-  <input id="vendor" placeholder="Vendor" />
-  <input id="vendorEmail" placeholder="Vendor Email" />
-  <input id="po" placeholder="PO Number" />
-  <input id="material" placeholder="Material" />
-  <input id="date" type="date" />
-  <input id="remarks" placeholder="Remarks" />
-  <button type="submit">Add PO</button>
-  <button type="button" onclick="exportExcel()">Export to Excel</button>
-  <select id="vendorDropdown"></select>
-  <button type="button" onclick="generateEmailReminderFromDropdown()">Generate Email</button>
-</form>
-
-<div id="emailPopup">
-  <textarea id="emailContent" readonly></textarea>
-  <button onclick="document.getElementById('emailPopup').style.display='none'">Close</button>
-</div>
-
-<table>
-  <thead>
-    <tr><th>Vendor</th><th>Vendor Email</th><th>PO No</th><th>Material</th><th>Delivery</th><th>Status</th><th>Days Left</th><th>Remarks</th></tr>
-  </thead>
-  <tbody id="tableBody"></tbody>
-</table>
-
-<script>
-let chart;
-
-function addRow(data) {
-  const { vendor, vendorEmail, po, material, date, remarks } = data;
-  const delivery = new Date(date);
-  const today = new Date();
-  const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
-  const status = daysLeft < 0 ? 'Delayed' : daysLeft <= 3 ? 'Due Soon' : 'On Time';
-  const row = document.createElement('tr');
-  if (status === 'Delayed') row.classList.add('delayed');
-  else if (status === 'Due Soon') row.classList.add('due-soon');
-  row.innerHTML = `<td>${vendor}</td><td>${vendorEmail}</td><td>${po}</td><td>${material}</td><td>${date}</td><td>${status}</td><td>${daysLeft}</td><td>${remarks}</td>`;
-  document.getElementById('tableBody').appendChild(row);
-  updateDropdown();
-  updateChart();
-}
-
-function addRowFromForm() {
-  const data = {
-    vendor: document.getElementById('vendor').value,
-    vendorEmail: document.getElementById('vendorEmail').value,
-    po: document.getElementById('po').value,
-    material: document.getElementById('material').value,
-    date: document.getElementById('date').value,
-    remarks: document.getElementById('remarks').value,
-  };
-  addRow(data);
-}
-
-function updateDropdown() {
-  const dropdown = document.getElementById('vendorDropdown');
-  const vendors = new Set();
-  document.querySelectorAll('#tableBody tr').forEach(tr => vendors.add(tr.children[0].textContent));
-  dropdown.innerHTML = '<option value="">Select Vendor</option>' + [...vendors].map(v => `<option value="${v}">${v}</option>`).join('');
-}
-
-function updateChart() {
-  const data = { OnTime: 0, DueSoon: 0, Delayed: 0 };
-  document.querySelectorAll('#tableBody tr').forEach(tr => {
-    const status = tr.children[5].textContent;
-    if (status === 'Delayed') data.Delayed++;
-    else if (status === 'Due Soon') data.DueSoon++;
-    else data.OnTime++;
-  });
-  const ctx = document.getElementById('statusChart').getContext('2d');
-  if (chart) chart.destroy();
-  chart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: ['On Time', 'Due Soon', 'Delayed'],
-      datasets: [{
-        label: 'PO Status Count',
-        data: [data.OnTime, data.DueSoon, data.Delayed],
-        backgroundColor: ['#28a745', '#ffc107', '#dc3545']
-      }]
-    },
-    options: { responsive: true, plugins: { legend: { display: false } } }
-  });
-}
-
-function exportExcel() {
-  let csv = 'Vendor,Email,PO,Material,Date,Status,Days Left,Remarks\n';
-  document.querySelectorAll('#tableBody tr').forEach(tr => {
-    csv += [...tr.children].map(td => td.textContent).join(',') + '\n';
-  });
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'po_data.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function generateEmailReminderFromDropdown() {
-  const vendor = document.getElementById('vendorDropdown').value;
-  if (!vendor) return alert("Select vendor");
-  let msg = `Dear ${vendor},\n\nHere are your Purchase Orders requiring attention:\n\n`;
-  const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
-  document.querySelectorAll('#tableBody tr').forEach(tr => {
-    if (tr.children[0].textContent === vendor) {
-      const po = tr.children[2].textContent;
-      const material = tr.children[3].textContent;
-      const deliveryDateStr = tr.children[4].textContent;
-      const delivery = new Date(deliveryDateStr);
-      const status = tr.children[5].textContent;
-      const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
-      if (status === 'Delayed') {
-        msg += `- PO ${po} (${material}) was due on ${deliveryDateStr} and is delayed by ${Math.abs(daysLeft)} days.\n`;
-      } else if (status === 'Due Soon') {
-        msg += `- PO ${po} (${material}) is due in ${daysLeft} days (${deliveryDateStr}).\n`;
-      }
+  <!-- CLOCK SCRIPT -->
+  <script>
+    function updateClock() {
+      const now = new Date();
+      const time = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        hour12: true
+      });
+      const date = now.toLocaleDateString('en-GB'); // DD/MM/YYYY
+      document.getElementById('clock').textContent = `${date} | ${time}`;
     }
-  });
-  msg += '\nRegards,\nAR PO Insight Team';
-  document.getElementById('emailContent').value = msg;
-  document.getElementById('emailPopup').style.display = 'block';
-}
+    setInterval(updateClock, 1000);
+    updateClock();
+  </script>
 
-function handleFileUpload(e) {
-  const files = Array.from(e.target.files);
-  files.forEach(file => {
-    if (file.type === 'application/pdf') handlePDF(file);
-    else handleImage(file);
-  });
-}
-
-function handleImage(file) {
-  const reader = new FileReader();
-  reader.onload = () => recognizeText(reader.result);
-  reader.readAsDataURL(file);
-}
-
-function handlePDF(file) {
-  const reader = new FileReader();
-  reader.onload = async () => {
-    const typedarray = new Uint8Array(reader.result);
-    const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      const viewport = page.getViewport({ scale: 2 });
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      await page.render({ canvasContext: context, viewport }).promise;
-      const imageData = canvas.toDataURL('image/png');
-      await recognizeText(imageData);
+  <!-- TOGGLE THEME SCRIPT -->
+  <script>
+    function toggleTheme() {
+      document.body.classList.toggle('light');
+      const icon = document.getElementById('themeIcon');
+      const isLight = document.body.classList.contains('light');
+      icon.src = isLight
+        ? 'https://img.icons8.com/ios-glyphs/30/000000/sun--v1.png'
+        : 'https://img.icons8.com/ios-glyphs/30/ffffff/moon-symbol.png';
     }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-async function recognizeText(imageData) {
-  try {
-    const { data: { text } } = await Tesseract.recognize(imageData, 'eng');
-    processOCRText(text);
-  } catch (e) {
-    console.error('OCR failed:', e);
-  }
-}
-
-function processOCRText(text) {
-  const vendor = (text.match(/vendor[:\-]?\s*(.*)/i) || [,'Vendor Inc'])[1].trim();
-  const vendorEmail = (text.match(/[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}/) || ['vendor@example.com'])[0];
-  const po = (text.match(/po(?:\s*number)?[:\-]?\s*([A-Z0-9\-]+)/i) || [,'PO001'])[1];
-  const material = (text.match(/material[:\-]?\s*(.*)/i) || [,'Steel Rod'])[1].trim();
-  const date = (text.match(/\b\d{4}-\d{2}-\d{2}\b/) || [new Date().toISOString().slice(0,10)])[0];
-  const remarks = (text.match(/remarks[:\-]?\s*(.*)/i) || ['OCR Auto Import'])[1].trim();
-  addRow({ vendor, vendorEmail, po, material, date, remarks });
-}
-</script>
+  </script>
 </body>
 </html>
+
