@@ -93,39 +93,66 @@
 </table>
 
 <script>
-// ... existing JavaScript remains unchanged ...
+const data = [];
 
-function generateEmailReminder() {
-  const vendorList = [...new Set(data.map(r => r.vendor))];
-  const vendor = prompt("Enter vendor name to send reminder to:\n" + vendorList.join("\n"));
-  if (!vendor) return;
+function addRow(rowData) {
+  const vendor = rowData?.vendor || document.getElementById('vendor').value.trim();
+  const vendorEmail = rowData?.vendorEmail || document.getElementById('vendorEmail').value.trim();
+  const po = rowData?.po || document.getElementById('po').value.trim();
+  const material = rowData?.material || document.getElementById('material').value.trim();
+  const date = rowData?.date || document.getElementById('date').value;
+  const remarks = rowData?.remarks || document.getElementById('remarks').value.trim();
+  if (!vendor || !po || !material || !date) return alert("Please fill all fields.");
+  data.push({ vendor, vendorEmail, po, material, date, remarks });
+  if (!rowData) {
+    document.getElementById('vendor').value = "";
+    document.getElementById('vendorEmail').value = "";
+    document.getElementById('po').value = "";
+    document.getElementById('material').value = "";
+    document.getElementById('date').value = "";
+    document.getElementById('remarks').value = "";
+  }
+  renderTable();
+}
 
-  const filtered = data.filter(r => r.vendor.toLowerCase() === vendor.toLowerCase());
-  if (!filtered.length) return alert("No records found for this vendor");
-
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = "";
   const today = new Date();
-  const delayed = filtered.filter(r => new Date(r.date) < today);
-  const dueSoon = filtered.filter(r => {
-    const daysLeft = Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24));
-    return daysLeft <= 3 && daysLeft >= 0;
+  let onTime = 0, due = 0, delayed = 0;
+  data.forEach((row) => {
+    const tr = document.createElement('tr');
+    const delivery = new Date(row.date);
+    const daysLeft = Math.ceil((delivery - today) / (1000 * 60 * 60 * 24));
+    let status = "On Time";
+    if (daysLeft < 0) { status = "Delayed"; tr.classList.add('delayed'); delayed++; }
+    else if (daysLeft <= 3) { status = "Due Soon"; tr.classList.add('due-soon'); due++; }
+    else { onTime++; }
+    tr.innerHTML = `<td>${row.vendor}</td><td>${row.vendorEmail || ''}</td><td>${row.po}</td><td>${row.material}</td><td>${row.date}</td><td>${status}</td><td>${daysLeft}</td><td>${row.remarks}</td>`;
+    tbody.appendChild(tr);
   });
+  document.getElementById('countTotal').innerText = data.length;
+  document.getElementById('countOnTime').innerText = onTime;
+  document.getElementById('countDue').innerText = due;
+  document.getElementById('countDelayed').innerText = delayed;
+}
 
-  if (!delayed.length && !dueSoon.length) return alert("No pending/due soon POs for this vendor");
-
-  let body = `Dear ${vendor},\n\nThe following Purchase Orders require your attention:\n`;
-  delayed.forEach(r => {
-    const days = Math.abs(Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24)));
-    body += `- PO #${r.po} | Delivery Date: ${r.date} | Delayed by ${days} days\n`;
+function handleBulkOCR(event) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+  files.forEach(file => {
+    Tesseract.recognize(file, 'eng').then(({ data: { text } }) => {
+      const vendor = /Vendor[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+      const email = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}/.exec(text)?.[0];
+      const po = /PO\s*Number[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+      const material = /Material[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+      const date = /Delivery\s*Date[:\s]+([0-9\-\/]+)/i.exec(text)?.[1]?.trim();
+      const remarks = /Remarks[:\s]+(.+)/i.exec(text)?.[1]?.trim();
+      if (vendor && po && material && date) {
+        addRow({ vendor, vendorEmail: email, po, material, date, remarks: remarks || '' });
+      }
+    });
   });
-  dueSoon.forEach(r => {
-    const days = Math.ceil((new Date(r.date) - today) / (1000 * 60 * 60 * 24));
-    body += `- PO #${r.po} | Delivery Date: ${r.date} | Due Soon (in ${days} days)\n`;
-  });
-
-  body += `\nKindly ensure timely delivery and provide an update.\n\nRegards,\nAR PO Insight`;
-
-  document.getElementById("emailContent").value = body;
-  document.getElementById("emailPopup").style.display = "block";
 }
 </script>
 </body>
