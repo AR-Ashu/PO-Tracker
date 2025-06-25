@@ -1,4 +1,3 @@
-<!-- FINAL ENHANCED VERSION: PO Tracker with OCR, Export, Email Reminder, Theme Toggle, Chart, Centered Title, Icon Toggle -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -152,9 +151,9 @@ function addRow(rowData = null) {
   if (!rowData) ['vendor','vendorEmail','po','material','date','remarks'].forEach(id => document.getElementById(id).value = '');
 }
 function exportExcel() {
-  let csv = 'Vendor,Email,PO,Material,Date,Status,Days Left,Remarks\n';
+  let csv = 'Vendor,Email,PO,Material,Date,Status,Days Left,Remarks\\n';
   document.querySelectorAll('#tableBody tr').forEach(tr => {
-    csv += [...tr.children].map(td => td.textContent).join(',') + '\n';
+    csv += [...tr.children].map(td => td.textContent).join(',') + '\\n';
   });
   const blob = new Blob([csv], {type: 'text/csv'});
   const url = URL.createObjectURL(blob);
@@ -165,13 +164,26 @@ function exportExcel() {
 function generateEmailReminderFromDropdown() {
   const vendor = document.getElementById('vendorDropdown').value;
   if (!vendor) return alert("Select vendor");
-  let msg = `Dear ${vendor},\n\nThe following POs are due soon or delayed:\n\n`;
+
+  let msg = `Dear ${vendor},\\n\\nWe hope this message finds you well. Please find below a summary of your Purchase Orders that require your attention:\\n\\n`;
+
   document.querySelectorAll('#tableBody tr').forEach(tr => {
-    if (tr.children[0].textContent === vendor && ['Delayed','Due Soon'].includes(tr.children[5].textContent)) {
-      msg += `- PO ${tr.children[2].textContent} (${tr.children[3].textContent}), Delivery ${tr.children[4].textContent}\n`;
+    if (tr.children[0].textContent === vendor) {
+      const po = tr.children[2].textContent;
+      const material = tr.children[3].textContent;
+      const delivery = tr.children[4].textContent;
+      const status = tr.children[5].textContent;
+      const daysLeft = parseInt(tr.children[6].textContent);
+
+      if (status === 'Delayed') {
+        msg += `- PO ${po} (${material}) was due on ${delivery} and is currently delayed by ${Math.abs(daysLeft)} days. Kindly take necessary action.\\n`;
+      } else if (status === 'Due Soon') {
+        msg += `- PO ${po} (${material}) is scheduled for delivery on ${delivery}, which is within the next ${daysLeft} day(s). Please ensure timely processing.\\n`;
+      }
     }
   });
-  msg += '\nPlease check on this.\n\nRegards,\nAR PO Insight';
+
+  msg += '\\nWe appreciate your prompt attention to these matters.\\n\\nBest regards,\\nAR PO Insight Team';
   document.getElementById('emailContent').value = msg;
   document.getElementById('emailPopup').style.display = 'block';
 }
@@ -182,11 +194,11 @@ function handleBulkOCR(e) {
     reader.onload = function () {
       Tesseract.recognize(reader.result, 'eng')
         .then(({ data: { text } }) => {
-          const vendor = (text.match(/vendor[:\s]+(.+)/i) || [,'Vendor Inc'])[1].trim();
-          const vendorEmail = (text.match(/([\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,})/) || [,''])[1];
-          const po = (text.match(/po\s*(number)?[:#\s]*([\w-]+)/i) || [,'','PO001'])[2];
-          const material = (text.match(/material[:\s]+(.+)/i) || [,'Steel Rod'])[1].trim();
-          const date = (text.match(/\d{4}-\d{2}-\d{2}/) || [new Date().toISOString().slice(0,10)])[0];
+          const vendor = (text.match(/vendor[:\\s]+(.+)/i) || [,'Vendor Inc'])[1].trim();
+          const vendorEmail = (text.match(/([\\w._%+-]+@[\\w.-]+\\.[a-zA-Z]{2,})/) || [,''])[1];
+          const po = (text.match(/po\\s*(number)?[:#\\s]*([\\w-]+)/i) || [,'','PO001'])[2];
+          const material = (text.match(/material[:\\s]+(.+)/i) || [,'Steel Rod'])[1].trim();
+          const date = (text.match(/\\d{4}-\\d{2}-\\d{2}/) || [new Date().toISOString().slice(0,10)])[0];
           const remarks = 'OCR Imported';
           addRow({vendor, vendorEmail, po, material, date, remarks});
         })
